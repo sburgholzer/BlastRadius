@@ -1,0 +1,17 @@
+{
+  "name": "@blast-radius/infra",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AWS CDK infrastructure for Blast Radius Visualizer",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc --build",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@blast-radius/core": "*",
+    "aws-cdk-lib": "^2.150.0",
+    "constructs": "^10.3.0"
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "lib": ["ES2022"],
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "composite": true,
+    "incremental": true,
+    "baseUrl": ".",
+    "paths": {
+      "@blast-radius/core": ["packages/core/src"],
+      "@blast-radius/core/*": ["packages/core/src/*"],
+      "@blast-radius/lambdas": ["packages/lambdas/src"],
+      "@blast-radius/lambdas/*": ["packages/lambdas/src/*"],
+      "@blast-radius/cli": ["packages/cli/src"],
+      "@blast-radius/cli/*": ["packages/cli/src/*"]
+    }
+  },
+  "references": [
+    { "path": "packages/core" },
+    { "path": "packages/lambdas" },
+    { "path": "packages/cli" },
+    { "path": "packages/infra" }
+  ],
+  "exclude": ["node_modules", "dist", "vitest.config.ts", "packages/frontend"]
+}

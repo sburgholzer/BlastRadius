@@ -74,8 +74,8 @@ Filter controls for the dependency graph visualization.
 Export analysis results in multiple formats.
 
 **Formats:**
-- JSON — Full structured analysis result
-- PDF — Formatted report with graph snapshot
+- JSON — Full structured analysis result with all required fields (resource type, ID, score, category, chain)
+- PDF — Formatted report generated with jsPDF including risk summary boxes, AI summary, color-coded resource table with dependency chains, and page footer
 
 ### AnalysisProgress
 
@@ -185,3 +185,4 @@ The build is deployed to an S3 bucket and served via CloudFront with SPA routing
 - `react` / `react-dom` — UI framework
 - `react-router-dom` — Client-side routing
 - `cytoscape` — Graph visualization engine
+- `jspdf` — PDF report generation

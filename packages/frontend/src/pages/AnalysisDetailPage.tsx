@@ -2,19 +2,29 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { apiClient } from '../api/client';
 import type { AnalysisResult } from '../api/types';
+import { DependencyGraph } from '../components/DependencyGraph';
+import { ResourceTable } from '../components/ResourceTable';
+import { GraphFilters } from '../components/GraphFilters';
+import { ExportPanel } from '../components/ExportPanel';
+import type { ScoredResource } from '../api/types';
 
 export function AnalysisDetailPage() {
   const { analysisId } = useParams<{ analysisId: string }>();
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [filteredResources, setFilteredResources] = useState<ScoredResource[]>([]);
+  const [activeView, setActiveView] = useState<'graph' | 'table'>('graph');
 
   useEffect(() => {
     if (!analysisId) return;
 
     apiClient
       .getAnalysis(analysisId)
-      .then(setResult)
+      .then((data) => {
+        setResult(data);
+        setFilteredResources(data.scoredResources ?? []);
+      })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
   }, [analysisId]);
@@ -54,12 +64,71 @@ export function AnalysisDetailPage() {
         </div>
       )}
 
-      {/* Graph visualization and tabular views will be added in subsequent tasks */}
-      <div className="analysis-content">
-        <p>
-          Graph visualization and detailed resource views will be rendered here.
-        </p>
+      {result.naturalLanguageSummary && (
+        <div className="risk-summary" style={{ marginTop: '1rem' }}>
+          <h2>AI Summary</h2>
+          <p>{result.naturalLanguageSummary}</p>
+        </div>
+      )}
+
+      {/* View toggle */}
+      <div style={{ display: 'flex', gap: '0.5rem', margin: '1.5rem 0 1rem' }}>
+        <button
+          onClick={() => setActiveView('graph')}
+          style={{
+            padding: '0.5rem 1rem',
+            background: activeView === 'graph' ? 'var(--color-primary)' : 'var(--color-surface)',
+            color: 'var(--color-text)',
+            border: '1px solid var(--color-border)',
+            borderRadius: '0.375rem',
+            cursor: 'pointer',
+          }}
+        >
+          Graph View
+        </button>
+        <button
+          onClick={() => setActiveView('table')}
+          style={{
+            padding: '0.5rem 1rem',
+            background: activeView === 'table' ? 'var(--color-primary)' : 'var(--color-surface)',
+            color: 'var(--color-text)',
+            border: '1px solid var(--color-border)',
+            borderRadius: '0.375rem',
+            cursor: 'pointer',
+          }}
+        >
+          Table View
+        </button>
       </div>
+
+      {/* Filters */}
+      {result.scoredResources && result.scoredResources.length > 0 && (
+        <GraphFilters
+          scoredResources={result.scoredResources}
+          sourceFormat={result.sourceFormat ?? 'canonical'}
+          onFilterChange={(filtered) => setFilteredResources(filtered)}
+        />
+      )}
+
+      {/* Graph or Table */}
+      {activeView === 'graph' && result.dependencyGraph && result.scoredResources ? (
+        <DependencyGraph
+          graph={result.dependencyGraph}
+          scoredResources={filteredResources}
+        />
+      ) : (
+        <ResourceTable resources={filteredResources} />
+      )}
+
+      {/* Export */}
+      {result.scoredResources && (
+        <ExportPanel
+          scoredResources={filteredResources}
+          dependencyGraph={result.dependencyGraph}
+          analysisId={result.analysisId}
+          naturalLanguageSummary={result.naturalLanguageSummary}
+        />
+      )}
     </div>
   );
 }

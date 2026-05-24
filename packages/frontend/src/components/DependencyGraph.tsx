@@ -79,6 +79,7 @@ export function DependencyGraph({
   const [selectedNode, setSelectedNode] = useState<SelectedNodeDetails | null>(
     null
   );
+  const [popoverPosition, setPopoverPosition] = useState<{ x: number; y: number } | null>(null);
 
   // Build a lookup map for scored resources
   const scoredMap = useRef<Map<string, ScoredResource>>(new Map());
@@ -98,6 +99,13 @@ export function DependencyGraph({
       const scored = scoredMap.current.get(resourceId);
 
       if (!node) return;
+
+      // Get the node's rendered position relative to the container
+      const cy = cyRef.current;
+      if (cy && containerRef.current) {
+        const renderedPos = event.target.renderedPosition();
+        setPopoverPosition({ x: renderedPos.x, y: renderedPos.y });
+      }
 
       const details: SelectedNodeDetails = {
         resourceId: node.resourceId,
@@ -120,6 +128,7 @@ export function DependencyGraph({
 
   const handleBackgroundTap = useCallback(() => {
     setSelectedNode(null);
+    setPopoverPosition(null);
     onNodeSelect?.(null);
   }, [onNodeSelect]);
 
@@ -245,61 +254,113 @@ export function DependencyGraph({
   }, [graph, scoredResources, handleNodeTap, handleBackgroundTap]);
 
   return (
-    <div className={`dependency-graph-container ${className ?? ''}`}>
+    <div className={`dependency-graph-container ${className ?? ''}`} style={{ position: 'relative' }}>
       <div
         ref={containerRef}
         className="dependency-graph-canvas"
-        style={{ width: '100%', height: '500px', border: '1px solid #e2e8f0' }}
+        style={{ width: '100%', height: '600px', border: '1px solid var(--color-border, #334155)', borderRadius: '0.5rem', background: 'var(--color-surface, #1e293b)' }}
         role="img"
         aria-label="Dependency graph visualization showing resource relationships and risk levels"
       />
-      {selectedNode && (
-        <div className="dependency-graph-details" role="region" aria-label="Selected resource details">
-          <h3>Resource Details</h3>
-          <dl className="details-list">
-            <dt>Resource ID</dt>
-            <dd>{selectedNode.resourceId}</dd>
-
-            <dt>Resource Type</dt>
-            <dd>{selectedNode.resourceType}</dd>
-
-            <dt>Impact Score</dt>
-            <dd>{selectedNode.impactScore}</dd>
-
-            <dt>Risk Category</dt>
-            <dd>
-              <span
-                className={`risk-badge risk-${selectedNode.riskCategory.toLowerCase()}`}
-                style={{ color: RISK_COLORS[selectedNode.riskCategory] }}
-              >
-                {selectedNode.riskCategory}
+      {selectedNode && popoverPosition && (
+        <div
+          className="dependency-graph-popover"
+          role="region"
+          aria-label="Selected resource details"
+          style={{
+            position: 'absolute',
+            top: popoverPosition.y,
+            left: popoverPosition.x,
+            transform: 'translate(-50%, -100%) translateY(-12px)',
+            background: 'var(--color-bg, #0f172a)',
+            border: `2px solid ${RISK_COLORS[selectedNode.riskCategory]}`,
+            borderRadius: '0.5rem',
+            padding: '1rem',
+            minWidth: '280px',
+            maxWidth: '380px',
+            boxShadow: '0 10px 25px rgba(0,0,0,0.5)',
+            zIndex: 1000,
+            fontSize: '0.8125rem',
+            color: 'var(--color-text, #f1f5f9)',
+          }}
+        >
+          {/* Header with score badge */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+            <span style={{ fontWeight: 600, color: RISK_COLORS[selectedNode.riskCategory], fontSize: '0.875rem' }}>
+              {selectedNode.riskCategory}
+            </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <span style={{
+                background: RISK_COLORS[selectedNode.riskCategory],
+                color: '#fff',
+                borderRadius: '9999px',
+                padding: '0.125rem 0.625rem',
+                fontWeight: 700,
+                fontSize: '0.8125rem',
+              }}>
+                {selectedNode.impactScore}
               </span>
-            </dd>
+              <button
+                onClick={() => { setSelectedNode(null); setPopoverPosition(null); onNodeSelect?.(null); }}
+                aria-label="Close details"
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: 'var(--color-text-muted, #94a3b8)',
+                  cursor: 'pointer',
+                  fontSize: '1.125rem',
+                  lineHeight: 1,
+                  padding: '0 0.125rem',
+                }}
+              >
+                ×
+              </button>
+            </div>
+          </div>
 
-            <dt>Region</dt>
-            <dd>{selectedNode.region}</dd>
+          {/* Resource info */}
+          <div style={{ marginBottom: '0.5rem' }}>
+            <div style={{ fontWeight: 600, wordBreak: 'break-all', marginBottom: '0.25rem' }}>
+              {selectedNode.resourceType}
+            </div>
+            <div style={{ color: 'var(--color-text-muted, #94a3b8)', fontSize: '0.75rem', wordBreak: 'break-all' }}>
+              {selectedNode.resourceId}
+            </div>
+          </div>
 
-            <dt>Account</dt>
-            <dd>{selectedNode.accountId}</dd>
+          {/* Metadata grid */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.25rem 1rem', fontSize: '0.75rem', color: 'var(--color-text-muted, #94a3b8)', marginBottom: '0.75rem' }}>
+            <span>Region: <strong style={{ color: 'var(--color-text, #f1f5f9)' }}>{selectedNode.region}</strong></span>
+            <span>Account: <strong style={{ color: 'var(--color-text, #f1f5f9)' }}>{selectedNode.accountId}</strong></span>
+            <span>Coverage: <strong style={{ color: 'var(--color-text, #f1f5f9)' }}>{selectedNode.dependencyCoverage}</strong></span>
+            <span>Direct: <strong style={{ color: 'var(--color-text, #f1f5f9)' }}>{selectedNode.isDirectChange ? 'Yes' : 'No'}</strong></span>
+          </div>
 
-            <dt>Provider</dt>
-            <dd>{selectedNode.provider}</dd>
-
-            <dt>Direct Change</dt>
-            <dd>{selectedNode.isDirectChange ? 'Yes' : 'No'}</dd>
-
-            <dt>Coverage</dt>
-            <dd>{selectedNode.dependencyCoverage}</dd>
-
-            <dt>Dependency Chain</dt>
-            <dd>
-              <ol className="dependency-chain">
+          {/* Dependency chain */}
+          {selectedNode.dependencyChain.length > 1 && (
+            <div style={{ borderTop: '1px solid var(--color-border, #334155)', paddingTop: '0.5rem' }}>
+              <div style={{ fontSize: '0.6875rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--color-text-muted, #94a3b8)', marginBottom: '0.375rem' }}>
+                Dependency Chain
+              </div>
+              <div style={{ fontSize: '0.75rem', fontFamily: 'var(--font-mono, monospace)', lineHeight: 1.6 }}>
                 {selectedNode.dependencyChain.map((id, idx) => (
-                  <li key={`${id}-${idx}`}>{id}</li>
+                  <span key={`${id}-${idx}`}>
+                    <span style={{ color: idx === selectedNode.dependencyChain.length - 1 ? RISK_COLORS[selectedNode.riskCategory] : 'var(--color-text, #f1f5f9)' }}>
+                      {id.length > 40 ? `...${id.slice(-35)}` : id}
+                    </span>
+                    {idx < selectedNode.dependencyChain.length - 1 && (
+                      <span style={{ color: 'var(--color-text-muted, #94a3b8)', margin: '0 0.25rem' }}> → </span>
+                    )}
+                  </span>
                 ))}
-              </ol>
-            </dd>
-          </dl>
+              </div>
+            </div>
+          )}
+
+          {/* Close hint */}
+          <div style={{ fontSize: '0.625rem', color: 'var(--color-text-muted, #94a3b8)', marginTop: '0.5rem', textAlign: 'center' }}>
+            Click background to dismiss
+          </div>
         </div>
       )}
     </div>

@@ -174,123 +174,114 @@ export function GraphFilters({
     filters.resourceTypes.size +
     filters.sourceTools.size;
 
+  const chipStyle = (active: boolean, color?: string): React.CSSProperties => ({
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '0.375rem',
+    padding: '0.25rem 0.75rem',
+    borderRadius: '9999px',
+    border: `1px solid ${active ? (color ?? 'var(--color-primary, #3b82f6)') : 'var(--color-border, #334155)'}`,
+    background: active ? `${color ?? 'var(--color-primary, #3b82f6)'}20` : 'transparent',
+    cursor: 'pointer',
+    fontSize: '0.75rem',
+    color: active ? (color ?? 'var(--color-text, #f1f5f9)') : 'var(--color-text-muted, #94a3b8)',
+    transition: 'all 0.15s',
+    userSelect: 'none' as const,
+  });
+
   return (
-    <div className="graph-filters" role="region" aria-label="Graph filters">
-      <div className="graph-filters__header">
-        <h3 className="graph-filters__title">Filters</h3>
-        {activeFilterCount > 0 && (
+    <div role="region" aria-label="Graph filters" style={{
+      display: 'flex',
+      flexWrap: 'wrap',
+      alignItems: 'center',
+      gap: '0.75rem',
+      padding: '0.75rem 1rem',
+      background: 'var(--color-surface, #1e293b)',
+      border: '1px solid var(--color-border, #334155)',
+      borderRadius: '0.5rem',
+      marginBottom: '1rem',
+    }}>
+      {/* Label */}
+      <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted, #94a3b8)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+        Filter:
+      </span>
+
+      {/* Risk Category chips */}
+      {ALL_RISK_CATEGORIES.map((category) => (
+        <label key={category} style={chipStyle(filters.riskCategories.has(category), RISK_CATEGORY_COLORS[category])}>
+          <input
+            type="checkbox"
+            checked={filters.riskCategories.has(category)}
+            onChange={() => handleRiskCategoryToggle(category)}
+            aria-label={`Filter by ${category} risk`}
+            style={{ display: 'none' }}
+          />
+          <span style={{ width: 8, height: 8, borderRadius: '50%', background: RISK_CATEGORY_COLORS[category] }} />
+          {category}
+        </label>
+      ))}
+
+      {/* Separator */}
+      <span style={{ width: 1, height: 20, background: 'var(--color-border, #334155)' }} />
+
+      {/* Resource Type chips */}
+      {availableResourceTypes.map((type) => {
+        const shortName = type.replace('AWS::', '').replace('::', '::');
+        return (
+          <label key={type} style={chipStyle(filters.resourceTypes.has(type))}>
+            <input
+              type="checkbox"
+              checked={filters.resourceTypes.has(type)}
+              onChange={() => handleResourceTypeToggle(type)}
+              aria-label={`Filter by ${type}`}
+              style={{ display: 'none' }}
+            />
+            {shortName}
+          </label>
+        );
+      })}
+
+      {/* Separator */}
+      {availableTools.length > 0 && (
+        <span style={{ width: 1, height: 20, background: 'var(--color-border, #334155)' }} />
+      )}
+
+      {/* Source Tool chips */}
+      {availableTools.map((tool) => (
+        <label key={tool} style={chipStyle(filters.sourceTools.has(tool))}>
+          <input
+            type="checkbox"
+            checked={filters.sourceTools.has(tool)}
+            onChange={() => handleSourceToolToggle(tool)}
+            aria-label={`Filter by ${tool}`}
+            style={{ display: 'none' }}
+          />
+          {tool}
+        </label>
+      ))}
+
+      {/* Clear + count */}
+      {activeFilterCount > 0 && (
+        <>
+          <span style={{ width: 1, height: 20, background: 'var(--color-border, #334155)' }} />
+          <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted, #94a3b8)' }}>
+            {applyFilters(scoredResources, filters).length}/{scoredResources.length}
+          </span>
           <button
-            className="graph-filters__clear-btn"
             onClick={handleClearAll}
             aria-label="Clear all filters"
+            style={{
+              background: 'none',
+              border: 'none',
+              color: 'var(--color-primary, #3b82f6)',
+              cursor: 'pointer',
+              fontSize: '0.75rem',
+              padding: 0,
+            }}
           >
-            Clear all ({activeFilterCount})
+            Clear
           </button>
-        )}
-      </div>
-
-      {/* Risk Category Filter */}
-      <fieldset className="graph-filters__section">
-        <legend className="graph-filters__section-title">Risk Category</legend>
-        <div className="graph-filters__options">
-          {ALL_RISK_CATEGORIES.map((category) => (
-            <label
-              key={category}
-              className={`graph-filters__chip ${
-                filters.riskCategories.has(category)
-                  ? 'graph-filters__chip--active'
-                  : ''
-              }`}
-              style={{
-                borderColor: filters.riskCategories.has(category)
-                  ? RISK_CATEGORY_COLORS[category]
-                  : undefined,
-                backgroundColor: filters.riskCategories.has(category)
-                  ? `${RISK_CATEGORY_COLORS[category]}20`
-                  : undefined,
-              }}
-            >
-              <input
-                type="checkbox"
-                className="graph-filters__checkbox"
-                checked={filters.riskCategories.has(category)}
-                onChange={() => handleRiskCategoryToggle(category)}
-                aria-label={`Filter by ${category} risk`}
-              />
-              <span
-                className="graph-filters__chip-dot"
-                style={{ backgroundColor: RISK_CATEGORY_COLORS[category] }}
-              />
-              {category}
-            </label>
-          ))}
-        </div>
-      </fieldset>
-
-      {/* Resource Type Filter */}
-      <fieldset className="graph-filters__section">
-        <legend className="graph-filters__section-title">Resource Type</legend>
-        <div className="graph-filters__options graph-filters__options--scrollable">
-          {availableResourceTypes.map((type) => (
-            <label
-              key={type}
-              className={`graph-filters__chip ${
-                filters.resourceTypes.has(type)
-                  ? 'graph-filters__chip--active'
-                  : ''
-              }`}
-            >
-              <input
-                type="checkbox"
-                className="graph-filters__checkbox"
-                checked={filters.resourceTypes.has(type)}
-                onChange={() => handleResourceTypeToggle(type)}
-                aria-label={`Filter by resource type ${type}`}
-              />
-              {type}
-            </label>
-          ))}
-          {availableResourceTypes.length === 0 && (
-            <span className="graph-filters__empty">No resource types available</span>
-          )}
-        </div>
-      </fieldset>
-
-      {/* Source IaC Tool Filter */}
-      <fieldset className="graph-filters__section">
-        <legend className="graph-filters__section-title">Source Tool</legend>
-        <div className="graph-filters__options">
-          {availableTools.map((tool) => (
-            <label
-              key={tool}
-              className={`graph-filters__chip ${
-                filters.sourceTools.has(tool)
-                  ? 'graph-filters__chip--active'
-                  : ''
-              }`}
-            >
-              <input
-                type="checkbox"
-                className="graph-filters__checkbox"
-                checked={filters.sourceTools.has(tool)}
-                onChange={() => handleSourceToolToggle(tool)}
-                aria-label={`Filter by source tool ${tool}`}
-              />
-              {tool}
-            </label>
-          ))}
-          {availableTools.length === 0 && (
-            <span className="graph-filters__empty">No source tools available</span>
-          )}
-        </div>
-      </fieldset>
-
-      {/* Active filter summary */}
-      {activeFilterCount > 0 && (
-        <div className="graph-filters__summary" aria-live="polite">
-          Showing {applyFilters(scoredResources, filters).length} of{' '}
-          {scoredResources.length} resources
-        </div>
+        </>
       )}
     </div>
   );

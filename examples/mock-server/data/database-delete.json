@@ -1,0 +1,371 @@
+{
+  "summary": "This change deletes the production RDS PostgreSQL instance prod-db, which serves as the primary data store for the entire application stack.\n\n**Highest Risk: API Lambda Functions (Score: 90/100, Critical)**\nThree Lambda functions (user-api, order-api, payment-api) connect directly to this database. Deleting the RDS instance will cause immediate connection failures, resulting in 500 errors on all API endpoints. There is no failover — these functions have the database connection string hardcoded in their environment variables. Suggested mitigation: This deletion should not proceed without first migrating all data to a replacement instance and updating all Lambda environment variables.\n\n**Critical Risk: ECS Order Processing Service (Score: 88/100, Critical)**\nThe order-processing ECS service writes transaction records to this database. Deletion will cause order processing to halt, potentially losing in-flight transactions. Suggested mitigation: Drain the order queue and ensure all pending transactions are committed before any database changes.\n\n**Critical Risk: API Gateway (Score: 85/100, Critical)**\nThe API Gateway routes to the Lambda functions that depend on this database. While the gateway itself won't fail, every request it routes will return errors, effectively making the entire public API non-functional. Suggested mitigation: Implement a maintenance mode response at the API Gateway level before proceeding.\n\nOverall, deleting this database will cause a complete production outage affecting all 8 downstream services. This is a catastrophic change that should only proceed as part of a planned migration with a fully tested replacement database already serving traffic.",
+  "directChanges": [
+    {
+      "resourceId": "arn:aws:rds:us-east-1:123456789012:db:prod-db",
+      "resourceType": "AWS::RDS::DBInstance",
+      "provider": "aws",
+      "region": "us-east-1",
+      "accountId": "123456789012",
+      "changeType": "Remove",
+      "changeDetail": "Deleting RDS PostgreSQL instance prod-db (db.r6g.xlarge, 500GB storage, Multi-AZ)"
+    }
+  ],
+  "dependencyGraph": {
+    "nodes": [
+      {
+        "resourceId": "arn:aws:rds:us-east-1:123456789012:db:prod-db",
+        "resourceType": "AWS::RDS::DBInstance",
+        "provider": "aws",
+        "region": "us-east-1",
+        "accountId": "123456789012",
+        "isDirectChange": true,
+        "dependencyCoverage": "full"
+      },
+      {
+        "resourceId": "arn:aws:lambda:us-east-1:123456789012:function:api-users-handler",
+        "resourceType": "AWS::Lambda::Function",
+        "provider": "aws",
+        "region": "us-east-1",
+        "accountId": "123456789012",
+        "isDirectChange": false,
+        "dependencyCoverage": "full"
+      },
+      {
+        "resourceId": "arn:aws:lambda:us-east-1:123456789012:function:api-orders-handler",
+        "resourceType": "AWS::Lambda::Function",
+        "provider": "aws",
+        "region": "us-east-1",
+        "accountId": "123456789012",
+        "isDirectChange": false,
+        "dependencyCoverage": "full"
+      },
+      {
+        "resourceId": "arn:aws:lambda:us-east-1:123456789012:function:api-payments-handler",
+        "resourceType": "AWS::Lambda::Function",
+        "provider": "aws",
+        "region": "us-east-1",
+        "accountId": "123456789012",
+        "isDirectChange": false,
+        "dependencyCoverage": "full"
+      },
+      {
+        "resourceId": "arn:aws:ecs:us-east-1:123456789012:service/prod-cluster/backend-api",
+        "resourceType": "AWS::ECS::Service",
+        "provider": "aws",
+        "region": "us-east-1",
+        "accountId": "123456789012",
+        "isDirectChange": false,
+        "dependencyCoverage": "full"
+      },
+      {
+        "resourceId": "arn:aws:ecs:us-east-1:123456789012:service/prod-cluster/worker-service",
+        "resourceType": "AWS::ECS::Service",
+        "provider": "aws",
+        "region": "us-east-1",
+        "accountId": "123456789012",
+        "isDirectChange": false,
+        "dependencyCoverage": "partial"
+      },
+      {
+        "resourceId": "arn:aws:apigateway:us-east-1::/restapis/a1b2c3d4e5",
+        "resourceType": "AWS::ApiGateway::RestApi",
+        "provider": "aws",
+        "region": "us-east-1",
+        "accountId": "123456789012",
+        "isDirectChange": false,
+        "dependencyCoverage": "full"
+      },
+      {
+        "resourceId": "arn:aws:elasticache:us-east-1:123456789012:cluster:session-cache",
+        "resourceType": "AWS::ElastiCache::CacheCluster",
+        "provider": "aws",
+        "region": "us-east-1",
+        "accountId": "123456789012",
+        "isDirectChange": false,
+        "dependencyCoverage": "full"
+      },
+      {
+        "resourceId": "arn:aws:sqs:us-east-1:123456789012:order-processing-queue",
+        "resourceType": "AWS::SQS::Queue",
+        "provider": "aws",
+        "region": "us-east-1",
+        "accountId": "123456789012",
+        "isDirectChange": false,
+        "dependencyCoverage": "full"
+      }
+    ],
+    "edges": [
+      {
+        "sourceId": "arn:aws:rds:us-east-1:123456789012:db:prod-db",
+        "targetId": "arn:aws:lambda:us-east-1:123456789012:function:api-users-handler",
+        "relationshipType": "is_data_source_for",
+        "depth": 1
+      },
+      {
+        "sourceId": "arn:aws:rds:us-east-1:123456789012:db:prod-db",
+        "targetId": "arn:aws:lambda:us-east-1:123456789012:function:api-orders-handler",
+        "relationshipType": "is_data_source_for",
+        "depth": 1
+      },
+      {
+        "sourceId": "arn:aws:rds:us-east-1:123456789012:db:prod-db",
+        "targetId": "arn:aws:lambda:us-east-1:123456789012:function:api-payments-handler",
+        "relationshipType": "is_data_source_for",
+        "depth": 1
+      },
+      {
+        "sourceId": "arn:aws:rds:us-east-1:123456789012:db:prod-db",
+        "targetId": "arn:aws:ecs:us-east-1:123456789012:service/prod-cluster/backend-api",
+        "relationshipType": "is_data_source_for",
+        "depth": 1
+      },
+      {
+        "sourceId": "arn:aws:ecs:us-east-1:123456789012:service/prod-cluster/backend-api",
+        "targetId": "arn:aws:ecs:us-east-1:123456789012:service/prod-cluster/worker-service",
+        "relationshipType": "sends_messages_to",
+        "depth": 2
+      },
+      {
+        "sourceId": "arn:aws:lambda:us-east-1:123456789012:function:api-users-handler",
+        "targetId": "arn:aws:apigateway:us-east-1::/restapis/a1b2c3d4e5",
+        "relationshipType": "is_integration_for",
+        "depth": 2
+      },
+      {
+        "sourceId": "arn:aws:lambda:us-east-1:123456789012:function:api-orders-handler",
+        "targetId": "arn:aws:apigateway:us-east-1::/restapis/a1b2c3d4e5",
+        "relationshipType": "is_integration_for",
+        "depth": 2
+      },
+      {
+        "sourceId": "arn:aws:lambda:us-east-1:123456789012:function:api-payments-handler",
+        "targetId": "arn:aws:apigateway:us-east-1::/restapis/a1b2c3d4e5",
+        "relationshipType": "is_integration_for",
+        "depth": 2
+      },
+      {
+        "sourceId": "arn:aws:ecs:us-east-1:123456789012:service/prod-cluster/backend-api",
+        "targetId": "arn:aws:elasticache:us-east-1:123456789012:cluster:session-cache",
+        "relationshipType": "reads_from",
+        "depth": 2
+      },
+      {
+        "sourceId": "arn:aws:lambda:us-east-1:123456789012:function:api-orders-handler",
+        "targetId": "arn:aws:sqs:us-east-1:123456789012:order-processing-queue",
+        "relationshipType": "publishes_to",
+        "depth": 2
+      }
+    ]
+  },
+  "scoredResources": [
+    {
+      "resourceId": "arn:aws:lambda:us-east-1:123456789012:function:api-users-handler",
+      "resourceType": "AWS::Lambda::Function",
+      "provider": "aws",
+      "region": "us-east-1",
+      "accountId": "123456789012",
+      "impactScore": 90,
+      "riskCategory": "Critical",
+      "dependencyChain": ["arn:aws:rds:us-east-1:123456789012:db:prod-db", "arn:aws:lambda:us-east-1:123456789012:function:api-users-handler"],
+      "dependencyDepth": 1,
+      "criticalityClassification": "High",
+      "changeTypeSeverity": 100,
+      "highestRiskPath": [
+        {
+          "sourceId": "arn:aws:rds:us-east-1:123456789012:db:prod-db",
+          "targetId": "arn:aws:lambda:us-east-1:123456789012:function:api-users-handler",
+          "relationshipType": "is_data_source_for",
+          "depth": 1
+        }
+      ]
+    },
+    {
+      "resourceId": "arn:aws:lambda:us-east-1:123456789012:function:api-orders-handler",
+      "resourceType": "AWS::Lambda::Function",
+      "provider": "aws",
+      "region": "us-east-1",
+      "accountId": "123456789012",
+      "impactScore": 90,
+      "riskCategory": "Critical",
+      "dependencyChain": ["arn:aws:rds:us-east-1:123456789012:db:prod-db", "arn:aws:lambda:us-east-1:123456789012:function:api-orders-handler"],
+      "dependencyDepth": 1,
+      "criticalityClassification": "High",
+      "changeTypeSeverity": 100,
+      "highestRiskPath": [
+        {
+          "sourceId": "arn:aws:rds:us-east-1:123456789012:db:prod-db",
+          "targetId": "arn:aws:lambda:us-east-1:123456789012:function:api-orders-handler",
+          "relationshipType": "is_data_source_for",
+          "depth": 1
+        }
+      ]
+    },
+    {
+      "resourceId": "arn:aws:lambda:us-east-1:123456789012:function:api-payments-handler",
+      "resourceType": "AWS::Lambda::Function",
+      "provider": "aws",
+      "region": "us-east-1",
+      "accountId": "123456789012",
+      "impactScore": 90,
+      "riskCategory": "Critical",
+      "dependencyChain": ["arn:aws:rds:us-east-1:123456789012:db:prod-db", "arn:aws:lambda:us-east-1:123456789012:function:api-payments-handler"],
+      "dependencyDepth": 1,
+      "criticalityClassification": "High",
+      "changeTypeSeverity": 100,
+      "highestRiskPath": [
+        {
+          "sourceId": "arn:aws:rds:us-east-1:123456789012:db:prod-db",
+          "targetId": "arn:aws:lambda:us-east-1:123456789012:function:api-payments-handler",
+          "relationshipType": "is_data_source_for",
+          "depth": 1
+        }
+      ]
+    },
+    {
+      "resourceId": "arn:aws:ecs:us-east-1:123456789012:service/prod-cluster/backend-api",
+      "resourceType": "AWS::ECS::Service",
+      "provider": "aws",
+      "region": "us-east-1",
+      "accountId": "123456789012",
+      "impactScore": 85,
+      "riskCategory": "Critical",
+      "dependencyChain": ["arn:aws:rds:us-east-1:123456789012:db:prod-db", "arn:aws:ecs:us-east-1:123456789012:service/prod-cluster/backend-api"],
+      "dependencyDepth": 1,
+      "criticalityClassification": "High",
+      "changeTypeSeverity": 100,
+      "highestRiskPath": [
+        {
+          "sourceId": "arn:aws:rds:us-east-1:123456789012:db:prod-db",
+          "targetId": "arn:aws:ecs:us-east-1:123456789012:service/prod-cluster/backend-api",
+          "relationshipType": "is_data_source_for",
+          "depth": 1
+        }
+      ]
+    },
+    {
+      "resourceId": "arn:aws:apigateway:us-east-1::/restapis/a1b2c3d4e5",
+      "resourceType": "AWS::ApiGateway::RestApi",
+      "provider": "aws",
+      "region": "us-east-1",
+      "accountId": "123456789012",
+      "impactScore": 78,
+      "riskCategory": "Critical",
+      "dependencyChain": ["arn:aws:rds:us-east-1:123456789012:db:prod-db", "arn:aws:lambda:us-east-1:123456789012:function:api-users-handler", "arn:aws:apigateway:us-east-1::/restapis/a1b2c3d4e5"],
+      "dependencyDepth": 2,
+      "criticalityClassification": "Critical",
+      "changeTypeSeverity": 100,
+      "highestRiskPath": [
+        {
+          "sourceId": "arn:aws:rds:us-east-1:123456789012:db:prod-db",
+          "targetId": "arn:aws:lambda:us-east-1:123456789012:function:api-users-handler",
+          "relationshipType": "is_data_source_for",
+          "depth": 1
+        },
+        {
+          "sourceId": "arn:aws:lambda:us-east-1:123456789012:function:api-users-handler",
+          "targetId": "arn:aws:apigateway:us-east-1::/restapis/a1b2c3d4e5",
+          "relationshipType": "is_integration_for",
+          "depth": 2
+        }
+      ]
+    },
+    {
+      "resourceId": "arn:aws:ecs:us-east-1:123456789012:service/prod-cluster/worker-service",
+      "resourceType": "AWS::ECS::Service",
+      "provider": "aws",
+      "region": "us-east-1",
+      "accountId": "123456789012",
+      "impactScore": 68,
+      "riskCategory": "High",
+      "dependencyChain": ["arn:aws:rds:us-east-1:123456789012:db:prod-db", "arn:aws:ecs:us-east-1:123456789012:service/prod-cluster/backend-api", "arn:aws:ecs:us-east-1:123456789012:service/prod-cluster/worker-service"],
+      "dependencyDepth": 2,
+      "criticalityClassification": "High",
+      "changeTypeSeverity": 100,
+      "highestRiskPath": [
+        {
+          "sourceId": "arn:aws:rds:us-east-1:123456789012:db:prod-db",
+          "targetId": "arn:aws:ecs:us-east-1:123456789012:service/prod-cluster/backend-api",
+          "relationshipType": "is_data_source_for",
+          "depth": 1
+        },
+        {
+          "sourceId": "arn:aws:ecs:us-east-1:123456789012:service/prod-cluster/backend-api",
+          "targetId": "arn:aws:ecs:us-east-1:123456789012:service/prod-cluster/worker-service",
+          "relationshipType": "sends_messages_to",
+          "depth": 2
+        }
+      ]
+    },
+    {
+      "resourceId": "arn:aws:elasticache:us-east-1:123456789012:cluster:session-cache",
+      "resourceType": "AWS::ElastiCache::CacheCluster",
+      "provider": "aws",
+      "region": "us-east-1",
+      "accountId": "123456789012",
+      "impactScore": 62,
+      "riskCategory": "High",
+      "dependencyChain": ["arn:aws:rds:us-east-1:123456789012:db:prod-db", "arn:aws:ecs:us-east-1:123456789012:service/prod-cluster/backend-api", "arn:aws:elasticache:us-east-1:123456789012:cluster:session-cache"],
+      "dependencyDepth": 2,
+      "criticalityClassification": "High",
+      "changeTypeSeverity": 100,
+      "highestRiskPath": [
+        {
+          "sourceId": "arn:aws:rds:us-east-1:123456789012:db:prod-db",
+          "targetId": "arn:aws:ecs:us-east-1:123456789012:service/prod-cluster/backend-api",
+          "relationshipType": "is_data_source_for",
+          "depth": 1
+        },
+        {
+          "sourceId": "arn:aws:ecs:us-east-1:123456789012:service/prod-cluster/backend-api",
+          "targetId": "arn:aws:elasticache:us-east-1:123456789012:cluster:session-cache",
+          "relationshipType": "reads_from",
+          "depth": 2
+        }
+      ]
+    },
+    {
+      "resourceId": "arn:aws:sqs:us-east-1:123456789012:order-processing-queue",
+      "resourceType": "AWS::SQS::Queue",
+      "provider": "aws",
+      "region": "us-east-1",
+      "accountId": "123456789012",
+      "impactScore": 55,
+      "riskCategory": "High",
+      "dependencyChain": ["arn:aws:rds:us-east-1:123456789012:db:prod-db", "arn:aws:lambda:us-east-1:123456789012:function:api-orders-handler", "arn:aws:sqs:us-east-1:123456789012:order-processing-queue"],
+      "dependencyDepth": 2,
+      "criticalityClassification": "Medium",
+      "changeTypeSeverity": 100,
+      "highestRiskPath": [
+        {
+          "sourceId": "arn:aws:rds:us-east-1:123456789012:db:prod-db",
+          "targetId": "arn:aws:lambda:us-east-1:123456789012:function:api-orders-handler",
+          "relationshipType": "is_data_source_for",
+          "depth": 1
+        },
+        {
+          "sourceId": "arn:aws:lambda:us-east-1:123456789012:function:api-orders-handler",
+          "targetId": "arn:aws:sqs:us-east-1:123456789012:order-processing-queue",
+          "relationshipType": "publishes_to",
+          "depth": 2
+        }
+      ]
+    }
+  ],
+  "riskSummary": {
+    "critical": 4,
+    "high": 3,
+    "medium": 1,
+    "low": 0,
+    "totalAffected": 8,
+    "highestScore": 90
+  },
+  "metadata": {
+    "analysisId": "analysis-demo-database-delete",
+    "sourceFormat": "terraform",
+    "analyzedAt": "2024-11-15T16:45:00Z",
+    "durationMs": 6800,
+    "accountId": "123456789012",
+    "region": "us-east-1"
+  }
+}

@@ -1,0 +1,239 @@
+{
+  "summary": "This change removes the HTTPS (port 443) ingress rule from security group sg-0a1b2c3d4e5f67890, which is attached to critical production infrastructure.\n\n**Highest Risk: Production Database (Score: 92/100, Critical)**\nThe RDS instance prod-postgres-primary is at critical risk because it is accessed through EC2 instance i-0abc123def456789a, which uses this security group for network access control. Removing HTTPS will break the encrypted connection path from the application tier to the database. Suggested mitigation: Ensure database connections use a separate security group with dedicated ingress rules before removing this rule.\n\n**High Risk: Application Load Balancer (Score: 72/100, High)**\nThe production ALB prod-web-alb is directly attached to this security group. Removing port 443 will cause HTTPS health checks to fail, triggering the ALB to mark all targets as unhealthy. This will result in immediate service disruption for end users. Suggested mitigation: Create a dedicated security group for the ALB with explicit HTTPS rules before modifying this shared group.\n\n**High Risk: ECS Web Service (Score: 55/100, High)**\nThe ECS Fargate service web-service receives traffic through the ALB. When the ALB health checks fail, the service will stop receiving traffic even though the containers themselves are healthy. Suggested mitigation: Consider implementing a circuit breaker or fallback routing path.\n\nOverall, this change affects 5 downstream resources across the production web stack. We recommend implementing the security group change in stages — first creating dedicated groups for the ALB and database, migrating those resources, then removing the rule from the shared group.",
+  "directChanges": [
+    {
+      "resourceId": "sg-0a1b2c3d4e5f67890",
+      "resourceType": "AWS::EC2::SecurityGroup",
+      "provider": "aws",
+      "region": "us-east-1",
+      "accountId": "123456789012",
+      "changeType": "Modify",
+      "changeDetail": "Removing ingress rule: port 443 (HTTPS) from 0.0.0.0/0"
+    }
+  ],
+  "dependencyGraph": {
+    "nodes": [
+      {
+        "resourceId": "sg-0a1b2c3d4e5f67890",
+        "resourceType": "AWS::EC2::SecurityGroup",
+        "provider": "aws",
+        "region": "us-east-1",
+        "accountId": "123456789012",
+        "isDirectChange": true,
+        "dependencyCoverage": "full"
+      },
+      {
+        "resourceId": "i-0abc123def456789a",
+        "resourceType": "AWS::EC2::Instance",
+        "provider": "aws",
+        "region": "us-east-1",
+        "accountId": "123456789012",
+        "isDirectChange": false,
+        "dependencyCoverage": "full"
+      },
+      {
+        "resourceId": "i-0def456abc789012b",
+        "resourceType": "AWS::EC2::Instance",
+        "provider": "aws",
+        "region": "us-east-1",
+        "accountId": "123456789012",
+        "isDirectChange": false,
+        "dependencyCoverage": "full"
+      },
+      {
+        "resourceId": "arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/app/prod-web-alb/1a2b3c4d5e6f7890",
+        "resourceType": "AWS::ElasticLoadBalancingV2::LoadBalancer",
+        "provider": "aws",
+        "region": "us-east-1",
+        "accountId": "123456789012",
+        "isDirectChange": false,
+        "dependencyCoverage": "full"
+      },
+      {
+        "resourceId": "arn:aws:ecs:us-east-1:123456789012:service/prod-cluster/web-service",
+        "resourceType": "AWS::ECS::Service",
+        "provider": "aws",
+        "region": "us-east-1",
+        "accountId": "123456789012",
+        "isDirectChange": false,
+        "dependencyCoverage": "partial"
+      },
+      {
+        "resourceId": "arn:aws:rds:us-east-1:123456789012:db:prod-postgres-primary",
+        "resourceType": "AWS::RDS::DBInstance",
+        "provider": "aws",
+        "region": "us-east-1",
+        "accountId": "123456789012",
+        "isDirectChange": false,
+        "dependencyCoverage": "full"
+      }
+    ],
+    "edges": [
+      {
+        "sourceId": "sg-0a1b2c3d4e5f67890",
+        "targetId": "i-0abc123def456789a",
+        "relationshipType": "is_attached_to",
+        "depth": 1
+      },
+      {
+        "sourceId": "sg-0a1b2c3d4e5f67890",
+        "targetId": "i-0def456abc789012b",
+        "relationshipType": "is_attached_to",
+        "depth": 1
+      },
+      {
+        "sourceId": "sg-0a1b2c3d4e5f67890",
+        "targetId": "arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/app/prod-web-alb/1a2b3c4d5e6f7890",
+        "relationshipType": "is_attached_to",
+        "depth": 1
+      },
+      {
+        "sourceId": "arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/app/prod-web-alb/1a2b3c4d5e6f7890",
+        "targetId": "arn:aws:ecs:us-east-1:123456789012:service/prod-cluster/web-service",
+        "relationshipType": "routes_to",
+        "depth": 2
+      },
+      {
+        "sourceId": "i-0abc123def456789a",
+        "targetId": "arn:aws:rds:us-east-1:123456789012:db:prod-postgres-primary",
+        "relationshipType": "connects_to",
+        "depth": 2
+      }
+    ]
+  },
+  "scoredResources": [
+    {
+      "resourceId": "i-0abc123def456789a",
+      "resourceType": "AWS::EC2::Instance",
+      "provider": "aws",
+      "region": "us-east-1",
+      "accountId": "123456789012",
+      "impactScore": 65,
+      "riskCategory": "High",
+      "dependencyChain": ["sg-0a1b2c3d4e5f67890", "i-0abc123def456789a"],
+      "dependencyDepth": 1,
+      "criticalityClassification": "High",
+      "changeTypeSeverity": 50,
+      "highestRiskPath": [
+        {
+          "sourceId": "sg-0a1b2c3d4e5f67890",
+          "targetId": "i-0abc123def456789a",
+          "relationshipType": "is_attached_to",
+          "depth": 1
+        }
+      ]
+    },
+    {
+      "resourceId": "i-0def456abc789012b",
+      "resourceType": "AWS::EC2::Instance",
+      "provider": "aws",
+      "region": "us-east-1",
+      "accountId": "123456789012",
+      "impactScore": 65,
+      "riskCategory": "High",
+      "dependencyChain": ["sg-0a1b2c3d4e5f67890", "i-0def456abc789012b"],
+      "dependencyDepth": 1,
+      "criticalityClassification": "High",
+      "changeTypeSeverity": 50,
+      "highestRiskPath": [
+        {
+          "sourceId": "sg-0a1b2c3d4e5f67890",
+          "targetId": "i-0def456abc789012b",
+          "relationshipType": "is_attached_to",
+          "depth": 1
+        }
+      ]
+    },
+    {
+      "resourceId": "arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/app/prod-web-alb/1a2b3c4d5e6f7890",
+      "resourceType": "AWS::ElasticLoadBalancingV2::LoadBalancer",
+      "provider": "aws",
+      "region": "us-east-1",
+      "accountId": "123456789012",
+      "impactScore": 72,
+      "riskCategory": "High",
+      "dependencyChain": ["sg-0a1b2c3d4e5f67890", "arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/app/prod-web-alb/1a2b3c4d5e6f7890"],
+      "dependencyDepth": 1,
+      "criticalityClassification": "Critical",
+      "changeTypeSeverity": 50,
+      "highestRiskPath": [
+        {
+          "sourceId": "sg-0a1b2c3d4e5f67890",
+          "targetId": "arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/app/prod-web-alb/1a2b3c4d5e6f7890",
+          "relationshipType": "is_attached_to",
+          "depth": 1
+        }
+      ]
+    },
+    {
+      "resourceId": "arn:aws:ecs:us-east-1:123456789012:service/prod-cluster/web-service",
+      "resourceType": "AWS::ECS::Service",
+      "provider": "aws",
+      "region": "us-east-1",
+      "accountId": "123456789012",
+      "impactScore": 55,
+      "riskCategory": "High",
+      "dependencyChain": ["sg-0a1b2c3d4e5f67890", "arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/app/prod-web-alb/1a2b3c4d5e6f7890", "arn:aws:ecs:us-east-1:123456789012:service/prod-cluster/web-service"],
+      "dependencyDepth": 2,
+      "criticalityClassification": "High",
+      "changeTypeSeverity": 50,
+      "highestRiskPath": [
+        {
+          "sourceId": "sg-0a1b2c3d4e5f67890",
+          "targetId": "arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/app/prod-web-alb/1a2b3c4d5e6f7890",
+          "relationshipType": "is_attached_to",
+          "depth": 1
+        },
+        {
+          "sourceId": "arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/app/prod-web-alb/1a2b3c4d5e6f7890",
+          "targetId": "arn:aws:ecs:us-east-1:123456789012:service/prod-cluster/web-service",
+          "relationshipType": "routes_to",
+          "depth": 2
+        }
+      ]
+    },
+    {
+      "resourceId": "arn:aws:rds:us-east-1:123456789012:db:prod-postgres-primary",
+      "resourceType": "AWS::RDS::DBInstance",
+      "provider": "aws",
+      "region": "us-east-1",
+      "accountId": "123456789012",
+      "impactScore": 92,
+      "riskCategory": "Critical",
+      "dependencyChain": ["sg-0a1b2c3d4e5f67890", "i-0abc123def456789a", "arn:aws:rds:us-east-1:123456789012:db:prod-postgres-primary"],
+      "dependencyDepth": 2,
+      "criticalityClassification": "Critical",
+      "changeTypeSeverity": 50,
+      "highestRiskPath": [
+        {
+          "sourceId": "sg-0a1b2c3d4e5f67890",
+          "targetId": "i-0abc123def456789a",
+          "relationshipType": "is_attached_to",
+          "depth": 1
+        },
+        {
+          "sourceId": "i-0abc123def456789a",
+          "targetId": "arn:aws:rds:us-east-1:123456789012:db:prod-postgres-primary",
+          "relationshipType": "connects_to",
+          "depth": 2
+        }
+      ]
+    }
+  ],
+  "riskSummary": {
+    "critical": 1,
+    "high": 3,
+    "medium": 1,
+    "low": 0,
+    "totalAffected": 5,
+    "highestScore": 92
+  },
+  "metadata": {
+    "analysisId": "analysis-demo-security-group-change",
+    "sourceFormat": "terraform",
+    "analyzedAt": "2024-11-15T14:32:00Z",
+    "durationMs": 4200,
+    "accountId": "123456789012",
+    "region": "us-east-1"
+  }
+}

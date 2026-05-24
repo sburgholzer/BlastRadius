@@ -1,0 +1,589 @@
+{
+  "summary": "This is a large-scale VPC restructuring that modifies 5 resources simultaneously, affecting 12 downstream services across 2 AWS accounts and 2 regions.\n\n**Highest Risk: Cross-Account RDS Cluster (Score: 88/100, Critical)**\nThe Aurora cluster in account 987654321098 (eu-west-1) uses VPC peering to connect to the primary VPC being modified. The CIDR block change will invalidate the peering route tables, severing the cross-account database replication. Suggested mitigation: Update VPC peering routes in both accounts simultaneously, or temporarily pause replication during the change window.\n\n**Critical Risk: Production ECS Services (Score: 82/100, Critical)**\nTwo ECS Fargate services (api-service, worker-service) run in the subnets being modified. Subnet CIDR changes require the tasks to be redeployed with new IP addresses, causing brief downtime. The NAT gateway replacement will also interrupt outbound internet access for these services during the transition. Suggested mitigation: Deploy replacement subnets first, migrate ECS tasks, then decommission old subnets.\n\n**High Risk: Lambda Functions (Score: 68/100, High)**\nFour Lambda functions are configured with VPC access using the affected subnets. They will lose network connectivity during the subnet modification and NAT gateway replacement. Cold starts after the change will take longer as ENIs are re-provisioned. Suggested mitigation: Temporarily remove VPC configuration from non-critical Lambda functions, or accept brief invocation failures during the maintenance window.\n\nOverall, this change requires careful orchestration. We recommend a maintenance window with the following order: (1) create new subnets, (2) migrate workloads, (3) update peering routes, (4) replace NAT gateway, (5) decommission old subnets. Estimated safe execution time: 45-60 minutes.",
+  "directChanges": [
+    {
+      "resourceId": "vpc-0a1b2c3d4e5f60001",
+      "resourceType": "AWS::EC2::VPC",
+      "provider": "aws",
+      "region": "us-east-1",
+      "accountId": "123456789012",
+      "changeType": "Modify",
+      "changeDetail": "Adding secondary CIDR block 10.1.0.0/16"
+    },
+    {
+      "resourceId": "subnet-0a1b2c3d4e5f60002",
+      "resourceType": "AWS::EC2::Subnet",
+      "provider": "aws",
+      "region": "us-east-1",
+      "accountId": "123456789012",
+      "changeType": "Modify",
+      "changeDetail": "Changing availability zone from us-east-1a to us-east-1b (triggers replacement)"
+    },
+    {
+      "resourceId": "subnet-0a1b2c3d4e5f60003",
+      "resourceType": "AWS::EC2::Subnet",
+      "provider": "aws",
+      "region": "us-east-1",
+      "accountId": "123456789012",
+      "changeType": "Remove",
+      "changeDetail": "Removing private subnet in us-east-1c"
+    },
+    {
+      "resourceId": "sg-0a1b2c3d4e5f60004",
+      "resourceType": "AWS::EC2::SecurityGroup",
+      "provider": "aws",
+      "region": "us-east-1",
+      "accountId": "123456789012",
+      "changeType": "Modify",
+      "changeDetail": "Restricting egress to VPC-only (removing 0.0.0.0/0 egress rule)"
+    },
+    {
+      "resourceId": "nat-0a1b2c3d4e5f60005",
+      "resourceType": "AWS::EC2::NatGateway",
+      "provider": "aws",
+      "region": "us-east-1",
+      "accountId": "123456789012",
+      "changeType": "Replace",
+      "changeDetail": "Replacing NAT gateway (subnet change forces recreation)"
+    }
+  ],
+  "dependencyGraph": {
+    "nodes": [
+      {
+        "resourceId": "vpc-0a1b2c3d4e5f60001",
+        "resourceType": "AWS::EC2::VPC",
+        "provider": "aws",
+        "region": "us-east-1",
+        "accountId": "123456789012",
+        "isDirectChange": true,
+        "dependencyCoverage": "full"
+      },
+      {
+        "resourceId": "subnet-0a1b2c3d4e5f60002",
+        "resourceType": "AWS::EC2::Subnet",
+        "provider": "aws",
+        "region": "us-east-1",
+        "accountId": "123456789012",
+        "isDirectChange": true,
+        "dependencyCoverage": "full"
+      },
+      {
+        "resourceId": "subnet-0a1b2c3d4e5f60003",
+        "resourceType": "AWS::EC2::Subnet",
+        "provider": "aws",
+        "region": "us-east-1",
+        "accountId": "123456789012",
+        "isDirectChange": true,
+        "dependencyCoverage": "full"
+      },
+      {
+        "resourceId": "sg-0a1b2c3d4e5f60004",
+        "resourceType": "AWS::EC2::SecurityGroup",
+        "provider": "aws",
+        "region": "us-east-1",
+        "accountId": "123456789012",
+        "isDirectChange": true,
+        "dependencyCoverage": "full"
+      },
+      {
+        "resourceId": "nat-0a1b2c3d4e5f60005",
+        "resourceType": "AWS::EC2::NatGateway",
+        "provider": "aws",
+        "region": "us-east-1",
+        "accountId": "123456789012",
+        "isDirectChange": true,
+        "dependencyCoverage": "full"
+      },
+      {
+        "resourceId": "arn:aws:ecs:us-east-1:123456789012:service/prod-cluster/api-service",
+        "resourceType": "AWS::ECS::Service",
+        "provider": "aws",
+        "region": "us-east-1",
+        "accountId": "123456789012",
+        "isDirectChange": false,
+        "dependencyCoverage": "full"
+      },
+      {
+        "resourceId": "arn:aws:ecs:us-east-1:123456789012:service/prod-cluster/worker-service",
+        "resourceType": "AWS::ECS::Service",
+        "provider": "aws",
+        "region": "us-east-1",
+        "accountId": "123456789012",
+        "isDirectChange": false,
+        "dependencyCoverage": "full"
+      },
+      {
+        "resourceId": "arn:aws:rds:us-east-1:123456789012:db:analytics-db",
+        "resourceType": "AWS::RDS::DBInstance",
+        "provider": "aws",
+        "region": "us-east-1",
+        "accountId": "123456789012",
+        "isDirectChange": false,
+        "dependencyCoverage": "full"
+      },
+      {
+        "resourceId": "arn:aws:lambda:us-east-1:123456789012:function:data-processor",
+        "resourceType": "AWS::Lambda::Function",
+        "provider": "aws",
+        "region": "us-east-1",
+        "accountId": "123456789012",
+        "isDirectChange": false,
+        "dependencyCoverage": "full"
+      },
+      {
+        "resourceId": "arn:aws:lambda:us-east-1:123456789012:function:event-handler",
+        "resourceType": "AWS::Lambda::Function",
+        "provider": "aws",
+        "region": "us-east-1",
+        "accountId": "123456789012",
+        "isDirectChange": false,
+        "dependencyCoverage": "partial"
+      },
+      {
+        "resourceId": "arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/app/internal-alb/abcdef1234567890",
+        "resourceType": "AWS::ElasticLoadBalancingV2::LoadBalancer",
+        "provider": "aws",
+        "region": "us-east-1",
+        "accountId": "123456789012",
+        "isDirectChange": false,
+        "dependencyCoverage": "full"
+      },
+      {
+        "resourceId": "arn:aws:elasticache:us-east-1:123456789012:cluster:redis-primary",
+        "resourceType": "AWS::ElastiCache::CacheCluster",
+        "provider": "aws",
+        "region": "us-east-1",
+        "accountId": "123456789012",
+        "isDirectChange": false,
+        "dependencyCoverage": "full"
+      },
+      {
+        "resourceId": "arn:aws:ec2:us-east-1:123456789012:instance/i-0fedcba987654321a",
+        "resourceType": "AWS::EC2::Instance",
+        "provider": "aws",
+        "region": "us-east-1",
+        "accountId": "123456789012",
+        "isDirectChange": false,
+        "dependencyCoverage": "full"
+      },
+      {
+        "resourceId": "arn:aws:ecs:us-west-2:987654321098:service/dr-cluster/api-replica",
+        "resourceType": "AWS::ECS::Service",
+        "provider": "aws",
+        "region": "us-west-2",
+        "accountId": "987654321098",
+        "isDirectChange": false,
+        "dependencyCoverage": "partial"
+      },
+      {
+        "resourceId": "arn:aws:rds:us-west-2:987654321098:db:analytics-db-replica",
+        "resourceType": "AWS::RDS::DBInstance",
+        "provider": "aws",
+        "region": "us-west-2",
+        "accountId": "987654321098",
+        "isDirectChange": false,
+        "dependencyCoverage": "partial"
+      },
+      {
+        "resourceId": "arn:aws:lambda:us-east-1:123456789012:function:health-checker",
+        "resourceType": "AWS::Lambda::Function",
+        "provider": "aws",
+        "region": "us-east-1",
+        "accountId": "123456789012",
+        "isDirectChange": false,
+        "dependencyCoverage": "full"
+      },
+      {
+        "resourceId": "arn:aws:sns:us-east-1:123456789012:infra-alerts",
+        "resourceType": "AWS::SNS::Topic",
+        "provider": "aws",
+        "region": "us-east-1",
+        "accountId": "123456789012",
+        "isDirectChange": false,
+        "dependencyCoverage": "full"
+      }
+    ],
+    "edges": [
+      {
+        "sourceId": "subnet-0a1b2c3d4e5f60002",
+        "targetId": "arn:aws:ecs:us-east-1:123456789012:service/prod-cluster/api-service",
+        "relationshipType": "hosts",
+        "depth": 1
+      },
+      {
+        "sourceId": "subnet-0a1b2c3d4e5f60003",
+        "targetId": "arn:aws:rds:us-east-1:123456789012:db:analytics-db",
+        "relationshipType": "hosts",
+        "depth": 1
+      },
+      {
+        "sourceId": "subnet-0a1b2c3d4e5f60003",
+        "targetId": "arn:aws:elasticache:us-east-1:123456789012:cluster:redis-primary",
+        "relationshipType": "hosts",
+        "depth": 1
+      },
+      {
+        "sourceId": "sg-0a1b2c3d4e5f60004",
+        "targetId": "arn:aws:ecs:us-east-1:123456789012:service/prod-cluster/api-service",
+        "relationshipType": "is_attached_to",
+        "depth": 1
+      },
+      {
+        "sourceId": "sg-0a1b2c3d4e5f60004",
+        "targetId": "arn:aws:ecs:us-east-1:123456789012:service/prod-cluster/worker-service",
+        "relationshipType": "is_attached_to",
+        "depth": 1
+      },
+      {
+        "sourceId": "sg-0a1b2c3d4e5f60004",
+        "targetId": "arn:aws:ec2:us-east-1:123456789012:instance/i-0fedcba987654321a",
+        "relationshipType": "is_attached_to",
+        "depth": 1
+      },
+      {
+        "sourceId": "nat-0a1b2c3d4e5f60005",
+        "targetId": "arn:aws:lambda:us-east-1:123456789012:function:data-processor",
+        "relationshipType": "provides_internet_for",
+        "depth": 1
+      },
+      {
+        "sourceId": "nat-0a1b2c3d4e5f60005",
+        "targetId": "arn:aws:lambda:us-east-1:123456789012:function:event-handler",
+        "relationshipType": "provides_internet_for",
+        "depth": 1
+      },
+      {
+        "sourceId": "vpc-0a1b2c3d4e5f60001",
+        "targetId": "arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/app/internal-alb/abcdef1234567890",
+        "relationshipType": "contains",
+        "depth": 1
+      },
+      {
+        "sourceId": "arn:aws:ecs:us-east-1:123456789012:service/prod-cluster/api-service",
+        "targetId": "arn:aws:ecs:us-west-2:987654321098:service/dr-cluster/api-replica",
+        "relationshipType": "replicates_to",
+        "depth": 2
+      },
+      {
+        "sourceId": "arn:aws:rds:us-east-1:123456789012:db:analytics-db",
+        "targetId": "arn:aws:rds:us-west-2:987654321098:db:analytics-db-replica",
+        "relationshipType": "replicates_to",
+        "depth": 2
+      },
+      {
+        "sourceId": "arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/app/internal-alb/abcdef1234567890",
+        "targetId": "arn:aws:lambda:us-east-1:123456789012:function:health-checker",
+        "relationshipType": "routes_to",
+        "depth": 2
+      },
+      {
+        "sourceId": "arn:aws:lambda:us-east-1:123456789012:function:health-checker",
+        "targetId": "arn:aws:sns:us-east-1:123456789012:infra-alerts",
+        "relationshipType": "publishes_to",
+        "depth": 3
+      }
+    ]
+  },
+  "scoredResources": [
+    {
+      "resourceId": "arn:aws:rds:us-east-1:123456789012:db:analytics-db",
+      "resourceType": "AWS::RDS::DBInstance",
+      "provider": "aws",
+      "region": "us-east-1",
+      "accountId": "123456789012",
+      "impactScore": 88,
+      "riskCategory": "Critical",
+      "dependencyChain": ["subnet-0a1b2c3d4e5f60003", "arn:aws:rds:us-east-1:123456789012:db:analytics-db"],
+      "dependencyDepth": 1,
+      "criticalityClassification": "Critical",
+      "changeTypeSeverity": 100,
+      "highestRiskPath": [
+        {
+          "sourceId": "subnet-0a1b2c3d4e5f60003",
+          "targetId": "arn:aws:rds:us-east-1:123456789012:db:analytics-db",
+          "relationshipType": "hosts",
+          "depth": 1
+        }
+      ]
+    },
+    {
+      "resourceId": "arn:aws:ecs:us-east-1:123456789012:service/prod-cluster/api-service",
+      "resourceType": "AWS::ECS::Service",
+      "provider": "aws",
+      "region": "us-east-1",
+      "accountId": "123456789012",
+      "impactScore": 82,
+      "riskCategory": "Critical",
+      "dependencyChain": ["subnet-0a1b2c3d4e5f60002", "arn:aws:ecs:us-east-1:123456789012:service/prod-cluster/api-service"],
+      "dependencyDepth": 1,
+      "criticalityClassification": "High",
+      "changeTypeSeverity": 80,
+      "highestRiskPath": [
+        {
+          "sourceId": "subnet-0a1b2c3d4e5f60002",
+          "targetId": "arn:aws:ecs:us-east-1:123456789012:service/prod-cluster/api-service",
+          "relationshipType": "hosts",
+          "depth": 1
+        }
+      ]
+    },
+    {
+      "resourceId": "arn:aws:elasticache:us-east-1:123456789012:cluster:redis-primary",
+      "resourceType": "AWS::ElastiCache::CacheCluster",
+      "provider": "aws",
+      "region": "us-east-1",
+      "accountId": "123456789012",
+      "impactScore": 78,
+      "riskCategory": "Critical",
+      "dependencyChain": ["subnet-0a1b2c3d4e5f60003", "arn:aws:elasticache:us-east-1:123456789012:cluster:redis-primary"],
+      "dependencyDepth": 1,
+      "criticalityClassification": "High",
+      "changeTypeSeverity": 100,
+      "highestRiskPath": [
+        {
+          "sourceId": "subnet-0a1b2c3d4e5f60003",
+          "targetId": "arn:aws:elasticache:us-east-1:123456789012:cluster:redis-primary",
+          "relationshipType": "hosts",
+          "depth": 1
+        }
+      ]
+    },
+    {
+      "resourceId": "arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/app/internal-alb/abcdef1234567890",
+      "resourceType": "AWS::ElasticLoadBalancingV2::LoadBalancer",
+      "provider": "aws",
+      "region": "us-east-1",
+      "accountId": "123456789012",
+      "impactScore": 72,
+      "riskCategory": "High",
+      "dependencyChain": ["vpc-0a1b2c3d4e5f60001", "arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/app/internal-alb/abcdef1234567890"],
+      "dependencyDepth": 1,
+      "criticalityClassification": "Critical",
+      "changeTypeSeverity": 50,
+      "highestRiskPath": [
+        {
+          "sourceId": "vpc-0a1b2c3d4e5f60001",
+          "targetId": "arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/app/internal-alb/abcdef1234567890",
+          "relationshipType": "contains",
+          "depth": 1
+        }
+      ]
+    },
+    {
+      "resourceId": "arn:aws:ecs:us-east-1:123456789012:service/prod-cluster/worker-service",
+      "resourceType": "AWS::ECS::Service",
+      "provider": "aws",
+      "region": "us-east-1",
+      "accountId": "123456789012",
+      "impactScore": 65,
+      "riskCategory": "High",
+      "dependencyChain": ["sg-0a1b2c3d4e5f60004", "arn:aws:ecs:us-east-1:123456789012:service/prod-cluster/worker-service"],
+      "dependencyDepth": 1,
+      "criticalityClassification": "High",
+      "changeTypeSeverity": 50,
+      "highestRiskPath": [
+        {
+          "sourceId": "sg-0a1b2c3d4e5f60004",
+          "targetId": "arn:aws:ecs:us-east-1:123456789012:service/prod-cluster/worker-service",
+          "relationshipType": "is_attached_to",
+          "depth": 1
+        }
+      ]
+    },
+    {
+      "resourceId": "arn:aws:lambda:us-east-1:123456789012:function:data-processor",
+      "resourceType": "AWS::Lambda::Function",
+      "provider": "aws",
+      "region": "us-east-1",
+      "accountId": "123456789012",
+      "impactScore": 68,
+      "riskCategory": "High",
+      "dependencyChain": ["nat-0a1b2c3d4e5f60005", "arn:aws:lambda:us-east-1:123456789012:function:data-processor"],
+      "dependencyDepth": 1,
+      "criticalityClassification": "High",
+      "changeTypeSeverity": 80,
+      "highestRiskPath": [
+        {
+          "sourceId": "nat-0a1b2c3d4e5f60005",
+          "targetId": "arn:aws:lambda:us-east-1:123456789012:function:data-processor",
+          "relationshipType": "provides_internet_for",
+          "depth": 1
+        }
+      ]
+    },
+    {
+      "resourceId": "arn:aws:lambda:us-east-1:123456789012:function:event-handler",
+      "resourceType": "AWS::Lambda::Function",
+      "provider": "aws",
+      "region": "us-east-1",
+      "accountId": "123456789012",
+      "impactScore": 68,
+      "riskCategory": "High",
+      "dependencyChain": ["nat-0a1b2c3d4e5f60005", "arn:aws:lambda:us-east-1:123456789012:function:event-handler"],
+      "dependencyDepth": 1,
+      "criticalityClassification": "High",
+      "changeTypeSeverity": 80,
+      "highestRiskPath": [
+        {
+          "sourceId": "nat-0a1b2c3d4e5f60005",
+          "targetId": "arn:aws:lambda:us-east-1:123456789012:function:event-handler",
+          "relationshipType": "provides_internet_for",
+          "depth": 1
+        }
+      ]
+    },
+    {
+      "resourceId": "arn:aws:ec2:us-east-1:123456789012:instance/i-0fedcba987654321a",
+      "resourceType": "AWS::EC2::Instance",
+      "provider": "aws",
+      "region": "us-east-1",
+      "accountId": "123456789012",
+      "impactScore": 50,
+      "riskCategory": "High",
+      "dependencyChain": ["sg-0a1b2c3d4e5f60004", "arn:aws:ec2:us-east-1:123456789012:instance/i-0fedcba987654321a"],
+      "dependencyDepth": 1,
+      "criticalityClassification": "Medium",
+      "changeTypeSeverity": 50,
+      "highestRiskPath": [
+        {
+          "sourceId": "sg-0a1b2c3d4e5f60004",
+          "targetId": "arn:aws:ec2:us-east-1:123456789012:instance/i-0fedcba987654321a",
+          "relationshipType": "is_attached_to",
+          "depth": 1
+        }
+      ]
+    },
+    {
+      "resourceId": "arn:aws:ecs:us-west-2:987654321098:service/dr-cluster/api-replica",
+      "resourceType": "AWS::ECS::Service",
+      "provider": "aws",
+      "region": "us-west-2",
+      "accountId": "987654321098",
+      "impactScore": 45,
+      "riskCategory": "Medium",
+      "dependencyChain": ["subnet-0a1b2c3d4e5f60002", "arn:aws:ecs:us-east-1:123456789012:service/prod-cluster/api-service", "arn:aws:ecs:us-west-2:987654321098:service/dr-cluster/api-replica"],
+      "dependencyDepth": 2,
+      "criticalityClassification": "High",
+      "changeTypeSeverity": 80,
+      "highestRiskPath": [
+        {
+          "sourceId": "subnet-0a1b2c3d4e5f60002",
+          "targetId": "arn:aws:ecs:us-east-1:123456789012:service/prod-cluster/api-service",
+          "relationshipType": "hosts",
+          "depth": 1
+        },
+        {
+          "sourceId": "arn:aws:ecs:us-east-1:123456789012:service/prod-cluster/api-service",
+          "targetId": "arn:aws:ecs:us-west-2:987654321098:service/dr-cluster/api-replica",
+          "relationshipType": "replicates_to",
+          "depth": 2
+        }
+      ]
+    },
+    {
+      "resourceId": "arn:aws:rds:us-west-2:987654321098:db:analytics-db-replica",
+      "resourceType": "AWS::RDS::DBInstance",
+      "provider": "aws",
+      "region": "us-west-2",
+      "accountId": "987654321098",
+      "impactScore": 42,
+      "riskCategory": "Medium",
+      "dependencyChain": ["subnet-0a1b2c3d4e5f60003", "arn:aws:rds:us-east-1:123456789012:db:analytics-db", "arn:aws:rds:us-west-2:987654321098:db:analytics-db-replica"],
+      "dependencyDepth": 2,
+      "criticalityClassification": "Critical",
+      "changeTypeSeverity": 100,
+      "highestRiskPath": [
+        {
+          "sourceId": "subnet-0a1b2c3d4e5f60003",
+          "targetId": "arn:aws:rds:us-east-1:123456789012:db:analytics-db",
+          "relationshipType": "hosts",
+          "depth": 1
+        },
+        {
+          "sourceId": "arn:aws:rds:us-east-1:123456789012:db:analytics-db",
+          "targetId": "arn:aws:rds:us-west-2:987654321098:db:analytics-db-replica",
+          "relationshipType": "replicates_to",
+          "depth": 2
+        }
+      ]
+    },
+    {
+      "resourceId": "arn:aws:lambda:us-east-1:123456789012:function:health-checker",
+      "resourceType": "AWS::Lambda::Function",
+      "provider": "aws",
+      "region": "us-east-1",
+      "accountId": "123456789012",
+      "impactScore": 38,
+      "riskCategory": "Medium",
+      "dependencyChain": ["vpc-0a1b2c3d4e5f60001", "arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/app/internal-alb/abcdef1234567890", "arn:aws:lambda:us-east-1:123456789012:function:health-checker"],
+      "dependencyDepth": 2,
+      "criticalityClassification": "Medium",
+      "changeTypeSeverity": 50,
+      "highestRiskPath": [
+        {
+          "sourceId": "vpc-0a1b2c3d4e5f60001",
+          "targetId": "arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/app/internal-alb/abcdef1234567890",
+          "relationshipType": "contains",
+          "depth": 1
+        },
+        {
+          "sourceId": "arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/app/internal-alb/abcdef1234567890",
+          "targetId": "arn:aws:lambda:us-east-1:123456789012:function:health-checker",
+          "relationshipType": "routes_to",
+          "depth": 2
+        }
+      ]
+    },
+    {
+      "resourceId": "arn:aws:sns:us-east-1:123456789012:infra-alerts",
+      "resourceType": "AWS::SNS::Topic",
+      "provider": "aws",
+      "region": "us-east-1",
+      "accountId": "123456789012",
+      "impactScore": 22,
+      "riskCategory": "Low",
+      "dependencyChain": ["vpc-0a1b2c3d4e5f60001", "arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/app/internal-alb/abcdef1234567890", "arn:aws:lambda:us-east-1:123456789012:function:health-checker", "arn:aws:sns:us-east-1:123456789012:infra-alerts"],
+      "dependencyDepth": 3,
+      "criticalityClassification": "Low",
+      "changeTypeSeverity": 50,
+      "highestRiskPath": [
+        {
+          "sourceId": "vpc-0a1b2c3d4e5f60001",
+          "targetId": "arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/app/internal-alb/abcdef1234567890",
+          "relationshipType": "contains",
+          "depth": 1
+        },
+        {
+          "sourceId": "arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/app/internal-alb/abcdef1234567890",
+          "targetId": "arn:aws:lambda:us-east-1:123456789012:function:health-checker",
+          "relationshipType": "routes_to",
+          "depth": 2
+        },
+        {
+          "sourceId": "arn:aws:lambda:us-east-1:123456789012:function:health-checker",
+          "targetId": "arn:aws:sns:us-east-1:123456789012:infra-alerts",
+          "relationshipType": "publishes_to",
+          "depth": 3
+        }
+      ]
+    }
+  ],
+  "riskSummary": {
+    "critical": 3,
+    "high": 5,
+    "medium": 3,
+    "low": 1,
+    "totalAffected": 12,
+    "highestScore": 88
+  },
+  "metadata": {
+    "analysisId": "analysis-demo-multi-resource",
+    "sourceFormat": "cloudformation",
+    "analyzedAt": "2024-11-15T09:15:00Z",
+    "durationMs": 12400,
+    "accountId": "123456789012",
+    "region": "us-east-1",
+    "crossAccountResources": ["987654321098"],
+    "crossRegionResources": ["us-west-2"]
+  }
+}

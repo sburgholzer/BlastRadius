@@ -6,6 +6,7 @@ import type {
   ScoredResource,
   RiskCategory,
 } from '../api/types';
+import { GraphLegend } from './GraphLegend';
 
 /** Color mapping for risk categories. */
 const RISK_COLORS: Record<RiskCategory, string> = {
@@ -17,6 +18,47 @@ const RISK_COLORS: Record<RiskCategory, string> = {
 
 /** Border color for directly changed resources. */
 const DIRECT_CHANGE_BORDER = '#2b6cb0';
+
+/** Available graph layout options. */
+type LayoutOption = 'auto' | 'hierarchical' | 'force' | 'circle' | 'grid';
+
+const LAYOUT_CONFIGS: Record<LayoutOption, cytoscape.LayoutOptions> = {
+  auto: {
+    name: 'cose',
+    animate: false,
+    nodeDimensionsIncludeLabels: true,
+    idealEdgeLength: () => 120,
+    nodeRepulsion: () => 8000,
+    gravity: 0.25,
+  } as cytoscape.LayoutOptions,
+  hierarchical: {
+    name: 'breadthfirst',
+    animate: false,
+    directed: true,
+    spacingFactor: 1.5,
+    nodeDimensionsIncludeLabels: true,
+  } as cytoscape.LayoutOptions,
+  force: {
+    name: 'cose',
+    animate: false,
+    nodeDimensionsIncludeLabels: true,
+    idealEdgeLength: () => 180,
+    nodeRepulsion: () => 12000,
+    gravity: 0.1,
+    numIter: 500,
+  } as cytoscape.LayoutOptions,
+  circle: {
+    name: 'circle',
+    animate: false,
+    nodeDimensionsIncludeLabels: true,
+  } as cytoscape.LayoutOptions,
+  grid: {
+    name: 'grid',
+    animate: false,
+    nodeDimensionsIncludeLabels: true,
+    condense: true,
+  } as cytoscape.LayoutOptions,
+};
 
 export interface SelectedNodeDetails {
   resourceId: string;
@@ -58,12 +100,6 @@ function getRiskCategory(
 
 /**
  * Abbreviates an AWS resource type to a short label for node display.
- * AWS::EC2::Instance → EC2
- * AWS::RDS::DBInstance → RDS
- * AWS::ElasticLoadBalancingV2::LoadBalancer → ALB
- * AWS::ECS::Service → ECS
- * AWS::Lambda::Function → Lambda (λ)
- * aws_instance → EC2
  */
 function abbreviateResourceType(resourceType: string): string {
   const abbreviations: Record<string, string> = {
@@ -86,25 +122,22 @@ function abbreviateResourceType(resourceType: string): string {
     'AWS::CloudWatch::Alarm': 'CW',
     'AWS::Logs::LogGroup': 'Logs',
     'AWS::ElastiCache::CacheCluster': 'Cache',
-    // Terraform style
-    'aws_instance': 'EC2',
-    'aws_security_group': 'SG',
-    'aws_db_instance': 'RDS',
-    'aws_rds_cluster': 'RDS',
-    'aws_lambda_function': 'λ',
-    'aws_ecs_service': 'ECS',
-    'aws_lb': 'ALB',
-    'aws_alb': 'ALB',
-    'aws_dynamodb_table': 'DDB',
-    'aws_s3_bucket': 'S3',
-    'aws_iam_role': 'IAM',
-    'aws_eks_cluster': 'EKS',
+    aws_instance: 'EC2',
+    aws_security_group: 'SG',
+    aws_db_instance: 'RDS',
+    aws_rds_cluster: 'RDS',
+    aws_lambda_function: 'λ',
+    aws_ecs_service: 'ECS',
+    aws_lb: 'ALB',
+    aws_alb: 'ALB',
+    aws_dynamodb_table: 'DDB',
+    aws_s3_bucket: 'S3',
+    aws_iam_role: 'IAM',
+    aws_eks_cluster: 'EKS',
   };
 
   if (abbreviations[resourceType]) return abbreviations[resourceType];
 
-  // Fallback: extract the last segment
-  // AWS::EC2::VPC → VPC, AWS::Something::Thing → Thing
   const parts = resourceType.split('::');
   if (parts.length >= 3) return parts[2].slice(0, 6);
   if (parts.length === 1 && resourceType.startsWith('aws_')) {
@@ -116,14 +149,8 @@ function abbreviateResourceType(resourceType: string): string {
 /**
  * Interactive dependency graph visualization using Cytoscape.js.
  *
- * Supports zoom, pan, and node selection. Nodes are color-coded by risk category:
- * - Critical: red
- * - High: orange
- * - Medium: yellow
- * - Low: green
- *
- * Selecting a node displays resource details including type, ID, impact score,
- * and the full dependency chain.
+ * Supports zoom, pan, node selection, hover highlighting, animated edges,
+ * dynamic node sizing, and multiple layout options.
  */
 export function DependencyGraph({
   graph,
@@ -133,10 +160,10 @@ export function DependencyGraph({
 }: DependencyGraphProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const cyRef = useRef<Core | null>(null);
-  const [selectedNode, setSelectedNode] = useState<SelectedNodeDetails | null>(
-    null
-  );
+  const animIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [selectedNode, setSelectedNode] = useState<SelectedNodeDetails | null>(null);
   const [popoverPosition, setPopoverPosition] = useState<{ x: number; y: number } | null>(null);
+  const [selectedLayout, setSelectedLayout] = useState<LayoutOption>('auto');
 
   // Build a lookup map for scored resources
   const scoredMap = useRef<Map<string, ScoredResource>>(new Map());
@@ -157,7 +184,6 @@ export function DependencyGraph({
 
       if (!node) return;
 
-      // Get the node's rendered position relative to the container
       const cy = cyRef.current;
       if (cy && containerRef.current) {
         const renderedPos = event.target.renderedPosition();
@@ -189,6 +215,15 @@ export function DependencyGraph({
     onNodeSelect?.(null);
   }, [onNodeSelect]);
 
+  // Handle layout change
+  const handleLayoutChange = useCallback((layout: LayoutOption) => {
+    setSelectedLayout(layout);
+    const cy = cyRef.current;
+    if (cy) {
+      cy.layout(LAYOUT_CONFIGS[layout]).run();
+    }
+  }, []);
+
   // Initialize and update Cytoscape instance
   useEffect(() => {
     if (!containerRef.current) return;
@@ -200,18 +235,18 @@ export function DependencyGraph({
       ...graph.nodes.map((node) => {
         const riskCategory = getRiskCategory(node, map);
         const scored = map.get(node.resourceId);
-        const score = scored?.impactScore ?? (node.isDirectChange ? '★' : '?');
-
-        // Abbreviate resource type: AWS::EC2::Instance → EC2, AWS::RDS::DBInstance → RDS, etc.
+        const score = scored?.impactScore ?? (node.isDirectChange ? 100 : 0);
+        const scoreLabel = scored?.impactScore ?? (node.isDirectChange ? '★' : '?');
         const typeAbbrev = abbreviateResourceType(node.resourceType);
 
         return {
           data: {
             id: node.resourceId,
-            label: `${score}\n${typeAbbrev}`,
+            label: `${scoreLabel}\n${typeAbbrev}`,
             riskCategory,
             isDirectChange: node.isDirectChange,
             resourceType: node.resourceType,
+            score: typeof score === 'number' ? score : 0,
           },
         };
       }),
@@ -230,6 +265,12 @@ export function DependencyGraph({
       cyRef.current.destroy();
     }
 
+    // Clear previous animation interval
+    if (animIntervalRef.current) {
+      clearInterval(animIntervalRef.current);
+      animIntervalRef.current = null;
+    }
+
     const cy = cytoscape({
       container: containerRef.current,
       elements,
@@ -242,19 +283,31 @@ export function DependencyGraph({
             'text-valign': 'center',
             'text-halign': 'center',
             'font-size': '10px',
-            width: 60,
-            height: 60,
-            'background-color': (ele) => {
+            // Dynamic node sizing based on score
+            width: ((ele: cytoscape.NodeSingular) => {
+              if (ele.data('isDirectChange')) return 50;
+              const s = ele.data('score');
+              return s ? 35 + (s / 100) * 35 : 30;
+            }) as unknown as number,
+            height: ((ele: cytoscape.NodeSingular) => {
+              if (ele.data('isDirectChange')) return 50;
+              const s = ele.data('score');
+              return s ? 35 + (s / 100) * 35 : 30;
+            }) as unknown as number,
+            'background-color': ((ele: cytoscape.NodeSingular) => {
               const category = ele.data('riskCategory') as RiskCategory;
               return RISK_COLORS[category] || RISK_COLORS.Low;
-            },
-            'border-width': (ele) => (ele.data('isDirectChange') ? 4 : 2),
-            'border-color': (ele) =>
+            }) as unknown as string,
+            'border-width': ((ele: cytoscape.NodeSingular) =>
+              ele.data('isDirectChange') ? 4 : 2) as unknown as number,
+            'border-color': ((ele: cytoscape.NodeSingular) =>
               ele.data('isDirectChange')
                 ? DIRECT_CHANGE_BORDER
-                : '#718096',
+                : '#718096') as unknown as string,
             color: '#1a202c',
-          },
+            'transition-property': 'opacity',
+            'transition-duration': 150,
+          } as cytoscape.Css.Node,
         },
         {
           selector: 'node:selected',
@@ -273,7 +326,12 @@ export function DependencyGraph({
             'target-arrow-shape': 'triangle',
             'curve-style': 'bezier',
             'arrow-scale': 0.8,
-          },
+            'line-style': 'dashed',
+            'line-dash-pattern': [6, 3],
+            'line-dash-offset': 0,
+            'transition-property': 'opacity',
+            'transition-duration': 150,
+          } as unknown as cytoscape.Css.Edge,
         },
         {
           selector: 'edge:selected',
@@ -284,15 +342,7 @@ export function DependencyGraph({
           },
         },
       ],
-      layout: {
-        name: 'cose',
-        animate: false,
-        nodeDimensionsIncludeLabels: true,
-        idealEdgeLength: () => 120,
-        nodeRepulsion: () => 8000,
-        gravity: 0.25,
-      },
-      // Enable zoom and pan
+      layout: LAYOUT_CONFIGS[selectedLayout],
       userZoomingEnabled: true,
       userPanningEnabled: true,
       boxSelectionEnabled: false,
@@ -300,7 +350,18 @@ export function DependencyGraph({
       maxZoom: 5,
     });
 
-    // Attach event listeners
+    // Hover highlight: dim non-connected elements
+    cy.on('mouseover', 'node', (event) => {
+      const node = event.target;
+      const neighborhood = node.closedNeighborhood();
+      cy.elements().not(neighborhood).style('opacity', 0.15);
+      neighborhood.style('opacity', 1);
+    });
+    cy.on('mouseout', 'node', () => {
+      cy.elements().style('opacity', 1);
+    });
+
+    // Tap event listeners
     cy.on('tap', 'node', handleNodeTap);
     cy.on('tap', (event) => {
       if (event.target === cy) {
@@ -308,28 +369,70 @@ export function DependencyGraph({
       }
     });
 
+    // Animated edge flow (subtle dash movement)
+    let dashOffset = 0;
+    animIntervalRef.current = setInterval(() => {
+      dashOffset = (dashOffset + 1) % 100;
+      cy.edges().style('line-dash-offset', -dashOffset);
+    }, 60);
+
     cyRef.current = cy;
 
     return () => {
+      if (animIntervalRef.current) {
+        clearInterval(animIntervalRef.current);
+        animIntervalRef.current = null;
+      }
       cy.destroy();
       cyRef.current = null;
     };
-  }, [graph, scoredResources, handleNodeTap, handleBackgroundTap]);
+  }, [graph, scoredResources, handleNodeTap, handleBackgroundTap, selectedLayout]);
+
+  const layoutSelectStyle: React.CSSProperties = {
+    padding: '0.25rem 0.5rem',
+    fontSize: '0.75rem',
+    background: 'var(--color-surface, #1e293b)',
+    color: 'var(--color-text, #f1f5f9)',
+    border: '1px solid var(--color-border, #334155)',
+    borderRadius: '0.375rem',
+    cursor: 'pointer',
+    outline: 'none',
+  };
 
   return (
     <div className={`dependency-graph-container ${className ?? ''}`} style={{ position: 'relative' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
         <span style={{ fontSize: '0.6875rem', color: 'var(--color-text-muted, #94a3b8)' }}>
-          💡 Click a node for details • Scroll to zoom • Drag to pan
+          💡 Click a node for details • Scroll to zoom • Drag to pan • Hover to highlight
         </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <label style={{ fontSize: '0.6875rem', color: 'var(--color-text-muted, #94a3b8)' }}>
+            Layout:
+          </label>
+          <select
+            value={selectedLayout}
+            onChange={(e) => handleLayoutChange(e.target.value as LayoutOption)}
+            style={layoutSelectStyle}
+            aria-label="Graph layout"
+          >
+            <option value="auto">Auto</option>
+            <option value="hierarchical">Hierarchical</option>
+            <option value="force">Force</option>
+            <option value="circle">Circle</option>
+            <option value="grid">Grid</option>
+          </select>
+        </div>
       </div>
-      <div
-        ref={containerRef}
-        className="dependency-graph-canvas"
-        style={{ width: '100%', height: '600px', border: '1px solid var(--color-border, #334155)', borderRadius: '0.5rem', background: 'var(--color-surface, #1e293b)' }}
-        role="img"
-        aria-label="Dependency graph visualization showing resource relationships and risk levels"
-      />
+      <div style={{ position: 'relative' }}>
+        <div
+          ref={containerRef}
+          className="dependency-graph-canvas"
+          style={{ width: '100%', height: '600px', border: '1px solid var(--color-border, #334155)', borderRadius: '0.5rem', background: 'var(--color-surface, #1e293b)' }}
+          role="img"
+          aria-label="Dependency graph visualization showing resource relationships and risk levels"
+        />
+        <GraphLegend />
+      </div>
       {selectedNode && popoverPosition && (
         <div
           className="dependency-graph-popover"
@@ -337,7 +440,7 @@ export function DependencyGraph({
           aria-label="Selected resource details"
           style={{
             position: 'absolute',
-            top: popoverPosition.y,
+            top: popoverPosition.y + 44, // offset for the header bar
             left: popoverPosition.x,
             transform: 'translate(-50%, -100%) translateY(-12px)',
             background: 'var(--color-bg, #0f172a)',

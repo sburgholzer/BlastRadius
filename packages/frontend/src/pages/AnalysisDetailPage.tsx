@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import { apiClient } from '../api/client';
 import type { AnalysisResult } from '../api/types';
@@ -6,7 +6,15 @@ import { DependencyGraph } from '../components/DependencyGraph';
 import { ResourceTable } from '../components/ResourceTable';
 import { GraphFilters } from '../components/GraphFilters';
 import { ExportPanel } from '../components/ExportPanel';
-import type { ScoredResource } from '../api/types';
+import type { ScoredResource, RiskCategory } from '../api/types';
+
+/** Risk card configuration for the summary section. */
+const RISK_CARD_CONFIG: { key: keyof Pick<NonNullable<AnalysisResult['riskSummary']>, 'critical' | 'high' | 'medium' | 'low'>; label: string; category: RiskCategory; color: string }[] = [
+  { key: 'critical', label: 'Critical', category: 'Critical', color: '#dc2626' },
+  { key: 'high', label: 'High', category: 'High', color: '#ea580c' },
+  { key: 'medium', label: 'Medium', category: 'Medium', color: '#ca8a04' },
+  { key: 'low', label: 'Low', category: 'Low', color: '#16a34a' },
+];
 
 export function AnalysisDetailPage() {
   const { analysisId } = useParams<{ analysisId: string }>();
@@ -15,6 +23,7 @@ export function AnalysisDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [filteredResources, setFilteredResources] = useState<ScoredResource[]>([]);
   const [activeView, setActiveView] = useState<'graph' | 'table'>('graph');
+  const [activeRiskFilters, setActiveRiskFilters] = useState<Set<RiskCategory>>(new Set());
 
   useEffect(() => {
     if (!analysisId) return;
@@ -29,9 +38,56 @@ export function AnalysisDetailPage() {
       .finally(() => setLoading(false));
   }, [analysisId]);
 
+  /** Toggle a risk category filter from the summary cards. */
+  const handleCardClick = useCallback((category: RiskCategory) => {
+    setActiveRiskFilters((prev) => {
+      const next = new Set(prev);
+      if (next.has(category)) {
+        next.delete(category);
+      } else {
+        next.add(category);
+      }
+
+      // Apply the filter to scored resources
+      if (result?.scoredResources) {
+        if (next.size === 0) {
+          setFilteredResources(result.scoredResources);
+        } else {
+          setFilteredResources(
+            result.scoredResources.filter((r) => next.has(r.riskCategory))
+          );
+        }
+      }
+
+      return next;
+    });
+  }, [result]);
+
   if (loading) return <div className="loading">Loading analysis...</div>;
   if (error) return <div className="error">Error: {error}</div>;
   if (!result) return <div className="error">Analysis not found</div>;
+
+  const cardContainerStyle: React.CSSProperties = {
+    display: 'flex',
+    gap: '0.75rem',
+    marginBottom: '1rem',
+    flexWrap: 'wrap',
+  };
+
+  const cardStyle = (color: string, isActive: boolean): React.CSSProperties => ({
+    flex: '1 1 0',
+    minWidth: '120px',
+    background: isActive ? `${color}15` : 'var(--color-surface, #1e293b)',
+    borderLeft: `4px solid ${color}`,
+    border: isActive ? `1px solid ${color}` : '1px solid var(--color-border, #334155)',
+    borderLeftWidth: '4px',
+    borderLeftColor: color,
+    borderRadius: '0.5rem',
+    padding: '1rem 1.25rem',
+    cursor: 'pointer',
+    transition: 'all 0.15s ease',
+    userSelect: 'none' as const,
+  });
 
   return (
     <div className="analysis-detail-page">
@@ -47,25 +103,59 @@ export function AnalysisDetailPage() {
       </div>
 
       {result.riskSummary && (
-        <div className="risk-summary">
-          <h2>Risk Summary</h2>
-          <div className="risk-counts">
-            <div className="risk-critical">
-              Critical: {result.riskSummary.critical}
-            </div>
-            <div className="risk-high">High: {result.riskSummary.high}</div>
-            <div className="risk-medium">
-              Medium: {result.riskSummary.medium}
-            </div>
-            <div className="risk-low">Low: {result.riskSummary.low}</div>
+        <div style={{ marginBottom: '2rem' }}>
+          <h2 style={{ fontSize: '1rem', marginBottom: '1rem' }}>Risk Summary</h2>
+          <div style={cardContainerStyle}>
+            {RISK_CARD_CONFIG.map(({ key, label, category, color }) => {
+              const count = result.riskSummary![key];
+              const isActive = activeRiskFilters.has(category);
+              return (
+                <div
+                  key={key}
+                  onClick={() => handleCardClick(category)}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleCardClick(category); }}
+                  role="button"
+                  tabIndex={0}
+                  aria-pressed={isActive}
+                  aria-label={`Filter by ${label} risk: ${count} resources`}
+                  style={cardStyle(color, isActive)}
+                  onMouseEnter={(e) => {
+                    (e.currentTarget as HTMLElement).style.filter = 'brightness(1.15)';
+                  }}
+                  onMouseLeave={(e) => {
+                    (e.currentTarget as HTMLElement).style.filter = 'brightness(1)';
+                  }}
+                >
+                  <div style={{ fontSize: '1.75rem', fontWeight: 700, color, lineHeight: 1.2 }}>
+                    {count}
+                  </div>
+                  <div style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted, #94a3b8)', marginTop: '0.25rem' }}>
+                    {label}
+                  </div>
+                </div>
+              );
+            })}
           </div>
-          <p>Total affected: {result.riskSummary.totalAffected}</p>
-          <p>Highest score: {result.riskSummary.highestScore}</p>
+          <div style={{ display: 'flex', gap: '1.5rem', fontSize: '0.8125rem', color: 'var(--color-text-muted, #94a3b8)' }}>
+            <span>Total affected: <strong style={{ color: 'var(--color-text, #f1f5f9)' }}>{result.riskSummary.totalAffected}</strong></span>
+            <span>Highest score: <strong style={{ color: 'var(--color-text, #f1f5f9)' }}>{result.riskSummary.highestScore}</strong></span>
+            {activeRiskFilters.size > 0 && (
+              <button
+                onClick={() => {
+                  setActiveRiskFilters(new Set());
+                  setFilteredResources(result.scoredResources ?? []);
+                }}
+                style={{ background: 'none', border: 'none', color: 'var(--color-primary, #3b82f6)', cursor: 'pointer', fontSize: '0.8125rem' }}
+              >
+                Clear filter
+              </button>
+            )}
+          </div>
         </div>
       )}
 
       {result.naturalLanguageSummary && (
-        <div className="risk-summary" style={{ marginTop: '1rem' }}>
+        <div className="risk-summary" style={{ marginTop: '0', marginBottom: '2rem' }}>
           <h2>AI Summary</h2>
           <p>{result.naturalLanguageSummary}</p>
         </div>

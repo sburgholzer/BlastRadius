@@ -407,52 +407,70 @@ export function ExportPanel({
   }, []);
 
   return (
-    <div className="export-panel" role="region" aria-label="Export controls">
-      <h3 className="export-panel__title">Export Results</h3>
+    <div role="region" aria-label="Export controls" style={{
+      display: 'flex',
+      alignItems: 'center',
+      gap: '0.75rem',
+      padding: '0.75rem 1rem',
+      background: 'var(--color-surface, #1e293b)',
+      border: '1px solid var(--color-border, #334155)',
+      borderRadius: '0.5rem',
+      marginTop: '1rem',
+    }}>
+      <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted, #94a3b8)', fontWeight: 600 }}>
+        Export:
+      </span>
 
-      <div className="export-panel__actions">
-        <button
-          className="export-panel__btn export-panel__btn--json"
-          onClick={() => handleExport('json')}
-          disabled={status === 'exporting' || scoredResources.length === 0}
-          aria-label="Export as JSON"
-        >
-          {status === 'exporting' ? 'Exporting…' : 'Export JSON'}
-        </button>
+      <button
+        onClick={() => handleExport('json')}
+        disabled={status === 'exporting' || scoredResources.length === 0}
+        aria-label="Export as JSON"
+        style={{
+          padding: '0.375rem 0.875rem',
+          background: 'var(--color-surface, #1e293b)',
+          color: 'var(--color-text, #f1f5f9)',
+          border: '1px solid var(--color-border, #334155)',
+          borderRadius: '0.375rem',
+          fontSize: '0.8125rem',
+          cursor: status === 'exporting' || scoredResources.length === 0 ? 'not-allowed' : 'pointer',
+          opacity: status === 'exporting' || scoredResources.length === 0 ? 0.5 : 1,
+        }}
+      >
+        {status === 'exporting' ? 'Exporting…' : '↓ JSON'}
+      </button>
 
-        <button
-          className="export-panel__btn export-panel__btn--pdf"
-          onClick={() => handleExport('pdf')}
-          disabled={status === 'exporting' || scoredResources.length === 0}
-          aria-label="Export as PDF"
-        >
-          {status === 'exporting' ? 'Exporting…' : 'Export PDF'}
-        </button>
-      </div>
+      <button
+        onClick={() => handleExport('pdf')}
+        disabled={status === 'exporting' || scoredResources.length === 0}
+        aria-label="Export as PDF"
+        style={{
+          padding: '0.375rem 0.875rem',
+          background: 'var(--color-surface, #1e293b)',
+          color: 'var(--color-text, #f1f5f9)',
+          border: '1px solid var(--color-border, #334155)',
+          borderRadius: '0.375rem',
+          fontSize: '0.8125rem',
+          cursor: status === 'exporting' || scoredResources.length === 0 ? 'not-allowed' : 'pointer',
+          opacity: status === 'exporting' || scoredResources.length === 0 ? 0.5 : 1,
+        }}
+      >
+        {status === 'exporting' ? 'Exporting…' : '↓ PDF'}
+      </button>
 
       {status === 'success' && (
-        <p className="export-panel__message export-panel__message--success" role="status">
-          Export completed successfully.
-        </p>
+        <span style={{ fontSize: '0.75rem', color: 'var(--color-low, #16a34a)' }}>✓ Done</span>
       )}
 
       {status === 'error' && (
-        <div className="export-panel__message export-panel__message--error" role="alert">
-          <p>{errorMessage ?? 'Export failed. Please try again.'}</p>
+        <span style={{ fontSize: '0.75rem', color: 'var(--color-critical, #dc2626)' }}>
+          {errorMessage ?? 'Failed'}
           <button
-            className="export-panel__retry-btn"
             onClick={handleRetry}
-            aria-label="Retry export"
+            style={{ background: 'none', border: 'none', color: 'var(--color-primary, #3b82f6)', cursor: 'pointer', marginLeft: '0.5rem', fontSize: '0.75rem' }}
           >
             Retry
           </button>
-        </div>
-      )}
-
-      {scoredResources.length === 0 && (
-        <p className="export-panel__message export-panel__message--info">
-          No resources to export. Adjust filters or wait for analysis to complete.
-        </p>
+        </span>
       )}
     </div>
   );

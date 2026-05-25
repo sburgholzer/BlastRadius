@@ -203,7 +203,10 @@ export function GraphFilters({
     }}>
       {/* Label */}
       <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted, #94a3b8)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-        Filter:
+        Filter
+      </span>
+      <span style={{ fontSize: '0.625rem', color: 'var(--color-text-muted, #64748b)' }}>
+        (click to toggle)
       </span>
 
       {/* Risk Category chips */}

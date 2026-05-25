@@ -57,6 +57,63 @@ function getRiskCategory(
 }
 
 /**
+ * Abbreviates an AWS resource type to a short label for node display.
+ * AWS::EC2::Instance → EC2
+ * AWS::RDS::DBInstance → RDS
+ * AWS::ElasticLoadBalancingV2::LoadBalancer → ALB
+ * AWS::ECS::Service → ECS
+ * AWS::Lambda::Function → Lambda (λ)
+ * aws_instance → EC2
+ */
+function abbreviateResourceType(resourceType: string): string {
+  const abbreviations: Record<string, string> = {
+    'AWS::EC2::Instance': 'EC2',
+    'AWS::EC2::SecurityGroup': 'SG',
+    'AWS::RDS::DBInstance': 'RDS',
+    'AWS::RDS::DBCluster': 'RDS',
+    'AWS::Lambda::Function': 'λ',
+    'AWS::ECS::Service': 'ECS',
+    'AWS::ECS::Cluster': 'ECS',
+    'AWS::ElasticLoadBalancingV2::LoadBalancer': 'ALB',
+    'AWS::DynamoDB::Table': 'DDB',
+    'AWS::S3::Bucket': 'S3',
+    'AWS::IAM::Role': 'IAM',
+    'AWS::SNS::Topic': 'SNS',
+    'AWS::SQS::Queue': 'SQS',
+    'AWS::ApiGateway::RestApi': 'API',
+    'AWS::EKS::Cluster': 'EKS',
+    'AWS::Route53::HostedZone': 'R53',
+    'AWS::CloudWatch::Alarm': 'CW',
+    'AWS::Logs::LogGroup': 'Logs',
+    'AWS::ElastiCache::CacheCluster': 'Cache',
+    // Terraform style
+    'aws_instance': 'EC2',
+    'aws_security_group': 'SG',
+    'aws_db_instance': 'RDS',
+    'aws_rds_cluster': 'RDS',
+    'aws_lambda_function': 'λ',
+    'aws_ecs_service': 'ECS',
+    'aws_lb': 'ALB',
+    'aws_alb': 'ALB',
+    'aws_dynamodb_table': 'DDB',
+    'aws_s3_bucket': 'S3',
+    'aws_iam_role': 'IAM',
+    'aws_eks_cluster': 'EKS',
+  };
+
+  if (abbreviations[resourceType]) return abbreviations[resourceType];
+
+  // Fallback: extract the last segment
+  // AWS::EC2::VPC → VPC, AWS::Something::Thing → Thing
+  const parts = resourceType.split('::');
+  if (parts.length >= 3) return parts[2].slice(0, 6);
+  if (parts.length === 1 && resourceType.startsWith('aws_')) {
+    return resourceType.replace('aws_', '').slice(0, 5).toUpperCase();
+  }
+  return resourceType.slice(0, 6);
+}
+
+/**
  * Interactive dependency graph visualization using Cytoscape.js.
  *
  * Supports zoom, pan, and node selection. Nodes are color-coded by risk category:
@@ -142,10 +199,16 @@ export function DependencyGraph({
     const elements: cytoscape.ElementDefinition[] = [
       ...graph.nodes.map((node) => {
         const riskCategory = getRiskCategory(node, map);
+        const scored = map.get(node.resourceId);
+        const score = scored?.impactScore ?? (node.isDirectChange ? '★' : '?');
+
+        // Abbreviate resource type: AWS::EC2::Instance → EC2, AWS::RDS::DBInstance → RDS, etc.
+        const typeAbbrev = abbreviateResourceType(node.resourceType);
+
         return {
           data: {
             id: node.resourceId,
-            label: `${node.resourceType}\n${node.resourceId.slice(-12)}`,
+            label: `${score}\n${typeAbbrev}`,
             riskCategory,
             isDirectChange: node.isDirectChange,
             resourceType: node.resourceType,
@@ -255,6 +318,11 @@ export function DependencyGraph({
 
   return (
     <div className={`dependency-graph-container ${className ?? ''}`} style={{ position: 'relative' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+        <span style={{ fontSize: '0.6875rem', color: 'var(--color-text-muted, #94a3b8)' }}>
+          💡 Click a node for details • Scroll to zoom • Drag to pan
+        </span>
+      </div>
       <div
         ref={containerRef}
         className="dependency-graph-canvas"

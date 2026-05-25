@@ -110,169 +110,168 @@ export function ResourceTable({ resources }: ResourceTableProps) {
     return sortDirection === 'asc' ? ' ▲' : ' ▼';
   }
 
-  function riskCategoryClass(category: RiskCategory): string {
-    switch (category) {
-      case 'Critical':
-        return 'risk-critical';
-      case 'High':
-        return 'risk-high';
-      case 'Medium':
-        return 'risk-medium';
-      case 'Low':
-        return 'risk-low';
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  const RISK_COLORS: Record<RiskCategory, string> = {
+    Critical: '#dc2626',
+    High: '#ea580c',
+    Medium: '#ca8a04',
+    Low: '#16a34a',
+  };
+
+  function shortenId(id: string): string {
+    // Extract the meaningful part from ARNs
+    // arn:aws:rds:us-east-1:123456789012:db:prod-postgres → prod-postgres
+    if (id.startsWith('arn:')) {
+      const parts = id.split(':');
+      const lastPart = parts.slice(5).join(':');
+      return lastPart.length > 35 ? '...' + lastPart.slice(-32) : lastPart;
     }
+    return id.length > 35 ? '...' + id.slice(-32) : id;
+  }
+
+  function shortenType(type: string): string {
+    return type.replace('AWS::', '').replace('aws_', '');
   }
 
   if (resources.length === 0) {
-    return <div className="resource-table-empty">No affected resources.</div>;
+    return <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--color-text-muted, #94a3b8)' }}>No affected resources.</div>;
   }
 
+  const thStyle: React.CSSProperties = {
+    padding: '0.5rem 0.75rem',
+    textAlign: 'left',
+    fontSize: '0.6875rem',
+    textTransform: 'uppercase',
+    letterSpacing: '0.05em',
+    color: 'var(--color-text-muted, #94a3b8)',
+    borderBottom: '1px solid var(--color-border, #334155)',
+    cursor: 'pointer',
+    userSelect: 'none',
+    whiteSpace: 'nowrap',
+  };
+
+  const tdStyle: React.CSSProperties = {
+    padding: '0.5rem 0.75rem',
+    fontSize: '0.8125rem',
+    borderBottom: '1px solid var(--color-border, #334155)',
+    whiteSpace: 'nowrap',
+  };
+
   return (
-    <div className="resource-table-container">
-      <div className="resource-table-header">
-        <h2>Affected Resources</h2>
-        <span className="resource-table-count">
-          {resources.length} resource{resources.length !== 1 ? 's' : ''} total
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '0.75rem' }}>
+        <h2 style={{ fontSize: '1.125rem', fontWeight: 600 }}>Affected Resources</h2>
+        <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted, #94a3b8)' }}>
+          {resources.length} resource{resources.length !== 1 ? 's' : ''} total • 💡 Click a row for full details
         </span>
       </div>
 
-      <table className="resource-table" role="grid" aria-label="Affected resources sorted by impact score">
-        <thead>
-          <tr>
-            <th
-              onClick={() => handleSort('impactScore')}
-              aria-sort={
-                sortField === 'impactScore'
-                  ? sortDirection === 'asc'
-                    ? 'ascending'
-                    : 'descending'
-                  : 'none'
-              }
-              className="sortable"
-            >
-              Impact Score{getSortIndicator('impactScore')}
-            </th>
-            <th
-              onClick={() => handleSort('riskCategory')}
-              aria-sort={
-                sortField === 'riskCategory'
-                  ? sortDirection === 'asc'
-                    ? 'ascending'
-                    : 'descending'
-                  : 'none'
-              }
-              className="sortable"
-            >
-              Risk Category{getSortIndicator('riskCategory')}
-            </th>
-            <th
-              onClick={() => handleSort('resourceType')}
-              aria-sort={
-                sortField === 'resourceType'
-                  ? sortDirection === 'asc'
-                    ? 'ascending'
-                    : 'descending'
-                  : 'none'
-              }
-              className="sortable"
-            >
-              Resource Type{getSortIndicator('resourceType')}
-            </th>
-            <th
-              onClick={() => handleSort('resourceId')}
-              aria-sort={
-                sortField === 'resourceId'
-                  ? sortDirection === 'asc'
-                    ? 'ascending'
-                    : 'descending'
-                  : 'none'
-              }
-              className="sortable"
-            >
-              Resource ID{getSortIndicator('resourceId')}
-            </th>
-            <th
-              onClick={() => handleSort('region')}
-              aria-sort={
-                sortField === 'region'
-                  ? sortDirection === 'asc'
-                    ? 'ascending'
-                    : 'descending'
-                  : 'none'
-              }
-              className="sortable"
-            >
-              Region{getSortIndicator('region')}
-            </th>
-            <th
-              onClick={() => handleSort('dependencyDepth')}
-              aria-sort={
-                sortField === 'dependencyDepth'
-                  ? sortDirection === 'asc'
-                    ? 'ascending'
-                    : 'descending'
-                  : 'none'
-              }
-              className="sortable"
-            >
-              Depth{getSortIndicator('dependencyDepth')}
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {paginatedItems.map((resource) => (
-            <tr key={`${resource.resourceId}-${resource.accountId}`}>
-              <td className="score-cell">{resource.impactScore}</td>
-              <td>
-                <span className={`risk-badge ${riskCategoryClass(resource.riskCategory)}`}>
-                  {resource.riskCategory}
-                </span>
-              </td>
-              <td>{resource.resourceType}</td>
-              <td className="resource-id-cell" title={resource.resourceId}>
-                {resource.resourceId}
-              </td>
-              <td>{resource.region}</td>
-              <td>{resource.dependencyDepth}</td>
+      <div style={{ overflowX: 'auto', border: '1px solid var(--color-border, #334155)', borderRadius: '0.5rem' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse' }} role="grid" aria-label="Affected resources">
+          <thead>
+            <tr style={{ background: 'var(--color-surface, #1e293b)' }} title="Click column headers to sort">
+              <th style={thStyle} onClick={() => handleSort('impactScore')}>Score{getSortIndicator('impactScore')}</th>
+              <th style={thStyle} onClick={() => handleSort('riskCategory')}>Risk{getSortIndicator('riskCategory')}</th>
+              <th style={thStyle} onClick={() => handleSort('resourceType')}>Type{getSortIndicator('resourceType')}</th>
+              <th style={thStyle} onClick={() => handleSort('resourceId')}>Resource{getSortIndicator('resourceId')}</th>
+              <th style={thStyle} onClick={() => handleSort('region')}>Region{getSortIndicator('region')}</th>
+              <th style={thStyle} onClick={() => handleSort('dependencyDepth')}>Depth{getSortIndicator('dependencyDepth')}</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {paginatedItems.map((resource) => {
+              const isExpanded = expandedId === resource.resourceId;
+              return (
+                <>
+                  <tr
+                    key={resource.resourceId}
+                    onClick={() => setExpandedId(isExpanded ? null : resource.resourceId)}
+                    style={{
+                      cursor: 'pointer',
+                      background: isExpanded ? 'var(--color-surface, #1e293b)' : 'transparent',
+                      transition: 'background 0.1s',
+                    }}
+                  >
+                    <td style={{ ...tdStyle, fontWeight: 700, color: RISK_COLORS[resource.riskCategory] }}>
+                      {resource.impactScore}
+                    </td>
+                    <td style={tdStyle}>
+                      <span style={{ color: RISK_COLORS[resource.riskCategory], fontWeight: 500 }}>
+                        {resource.riskCategory}
+                      </span>
+                    </td>
+                    <td style={{ ...tdStyle, fontFamily: 'var(--font-mono, monospace)', fontSize: '0.75rem' }}>
+                      {shortenType(resource.resourceType)}
+                    </td>
+                    <td style={{ ...tdStyle, fontFamily: 'var(--font-mono, monospace)', fontSize: '0.75rem', color: 'var(--color-text-muted, #94a3b8)' }}>
+                      {shortenId(resource.resourceId)}
+                    </td>
+                    <td style={{ ...tdStyle, fontSize: '0.75rem' }}>{resource.region}</td>
+                    <td style={{ ...tdStyle, textAlign: 'center' }}>{resource.dependencyDepth}</td>
+                  </tr>
+                  {isExpanded && (
+                    <tr key={`${resource.resourceId}-detail`}>
+                      <td colSpan={6} style={{ padding: '0.75rem 1rem', background: 'var(--color-surface, #1e293b)', borderBottom: '1px solid var(--color-border, #334155)' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem 2rem', fontSize: '0.75rem' }}>
+                          <div>
+                            <span style={{ color: 'var(--color-text-muted, #94a3b8)' }}>Full Resource ID:</span>
+                            <div style={{ fontFamily: 'var(--font-mono, monospace)', fontSize: '0.6875rem', wordBreak: 'break-all', marginTop: '0.125rem' }}>
+                              {resource.resourceId}
+                            </div>
+                          </div>
+                          <div>
+                            <span style={{ color: 'var(--color-text-muted, #94a3b8)' }}>Account:</span>
+                            <div style={{ marginTop: '0.125rem' }}>{resource.accountId}</div>
+                          </div>
+                          <div style={{ gridColumn: '1 / -1' }}>
+                            <span style={{ color: 'var(--color-text-muted, #94a3b8)' }}>Dependency Chain:</span>
+                            <div style={{ fontFamily: 'var(--font-mono, monospace)', fontSize: '0.6875rem', marginTop: '0.25rem', display: 'flex', flexWrap: 'wrap', gap: '0.25rem', alignItems: 'center' }}>
+                              {resource.dependencyChain.map((id, idx) => (
+                                <span key={`${id}-${idx}`} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
+                                  <span style={{
+                                    background: idx === resource.dependencyChain.length - 1 ? `${RISK_COLORS[resource.riskCategory]}20` : 'var(--color-bg, #0f172a)',
+                                    border: `1px solid ${idx === resource.dependencyChain.length - 1 ? RISK_COLORS[resource.riskCategory] : 'var(--color-border, #334155)'}`,
+                                    borderRadius: '0.25rem',
+                                    padding: '0.125rem 0.375rem',
+                                    fontSize: '0.625rem',
+                                  }}>
+                                    {id.length > 30 ? '...' + id.slice(-27) : id}
+                                  </span>
+                                  {idx < resource.dependencyChain.length - 1 && (
+                                    <span style={{ color: 'var(--color-text-muted, #94a3b8)' }}>→</span>
+                                  )}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                          <div>
+                            <span style={{ color: 'var(--color-text-muted, #94a3b8)' }}>Criticality:</span>
+                            <div style={{ marginTop: '0.125rem' }}>{resource.criticalityClassification}</div>
+                          </div>
+                          <div>
+                            <span style={{ color: 'var(--color-text-muted, #94a3b8)' }}>Change Severity:</span>
+                            <div style={{ marginTop: '0.125rem' }}>{resource.changeTypeSeverity}/100</div>
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
 
       {totalPages > 1 && (
-        <nav className="resource-table-pagination" aria-label="Table pagination">
-          <button
-            onClick={() => setCurrentPage(1)}
-            disabled={safeCurrentPage === 1}
-            aria-label="First page"
-          >
-            «
-          </button>
-          <button
-            onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-            disabled={safeCurrentPage === 1}
-            aria-label="Previous page"
-          >
-            ‹
-          </button>
-          <span className="pagination-info">
-            Page {safeCurrentPage} of {totalPages}
-          </span>
-          <button
-            onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-            disabled={safeCurrentPage === totalPages}
-            aria-label="Next page"
-          >
-            ›
-          </button>
-          <button
-            onClick={() => setCurrentPage(totalPages)}
-            disabled={safeCurrentPage === totalPages}
-            aria-label="Last page"
-          >
-            »
-          </button>
-        </nav>
+        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '0.5rem', marginTop: '0.75rem', fontSize: '0.8125rem' }}>
+          <button onClick={() => setCurrentPage(1)} disabled={safeCurrentPage === 1} style={{ background: 'none', border: 'none', color: 'var(--color-text-muted, #94a3b8)', cursor: 'pointer' }}>«</button>
+          <button onClick={() => setCurrentPage((p) => Math.max(1, p - 1))} disabled={safeCurrentPage === 1} style={{ background: 'none', border: 'none', color: 'var(--color-text-muted, #94a3b8)', cursor: 'pointer' }}>‹</button>
+          <span style={{ color: 'var(--color-text-muted, #94a3b8)' }}>Page {safeCurrentPage} of {totalPages}</span>
+          <button onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))} disabled={safeCurrentPage === totalPages} style={{ background: 'none', border: 'none', color: 'var(--color-text-muted, #94a3b8)', cursor: 'pointer' }}>›</button>
+          <button onClick={() => setCurrentPage(totalPages)} disabled={safeCurrentPage === totalPages} style={{ background: 'none', border: 'none', color: 'var(--color-text-muted, #94a3b8)', cursor: 'pointer' }}>»</button>
+        </div>
       )}
     </div>
   );

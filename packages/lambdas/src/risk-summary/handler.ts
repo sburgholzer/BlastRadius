@@ -46,7 +46,7 @@ const BEDROCK_TIMEOUT_MS = 15_000;
 const TOP_K_RESOURCES = 3;
 
 /** The Bedrock model ID to use for summary generation. */
-const DEFAULT_MODEL_ID = 'anthropic.claude-3-haiku-20240307-v1:0';
+const DEFAULT_MODEL_ID = 'anthropic.claude-haiku-4-5-20251001-v1:0';
 
 /**
  * Select the top K highest-scoring resources for summary input.

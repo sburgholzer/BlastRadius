@@ -56,22 +56,22 @@ export class BlastRadiusApiGateway extends Construct {
     // --- Lambda integrations with 180-second timeout ---
 
     const analyzeIntegration = new apigateway.LambdaIntegration(props.analyzeFunction, {
-      timeout: cdk.Duration.seconds(180),
+      timeout: cdk.Duration.seconds(29),
       proxy: true,
     });
 
     const statusIntegration = new apigateway.LambdaIntegration(props.statusFunction, {
-      timeout: cdk.Duration.seconds(180),
+      timeout: cdk.Duration.seconds(29),
       proxy: true,
     });
 
     const exportIntegration = new apigateway.LambdaIntegration(props.exportFunction, {
-      timeout: cdk.Duration.seconds(180),
+      timeout: cdk.Duration.seconds(29),
       proxy: true,
     });
 
     const formatsIntegration = new apigateway.LambdaIntegration(props.formatsFunction, {
-      timeout: cdk.Duration.seconds(180),
+      timeout: cdk.Duration.seconds(29),
       proxy: true,
     });
 

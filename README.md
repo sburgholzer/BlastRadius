@@ -83,8 +83,63 @@ blast-radius-visualizer/
 
 - Node.js 20+
 - npm 9+
-- AWS account with Config and Resource Explorer enabled (for deployment)
-- AWS CDK CLI (for infrastructure deployment)
+- AWS CDK CLI (`npm install -g aws-cdk`)
+- AWS account with the following enabled (for deployment):
+
+#### AWS Config (Required)
+
+The Resource Resolver queries AWS Config for resource relationships. Config must be recording the resource types you want to analyze.
+
+```bash
+# Check current status
+aws configservice describe-configuration-recorders
+
+# Enable recording for all resource types
+aws configservice put-configuration-recorder \
+  --configuration-recorder '{"name":"default","roleARN":"arn:aws:iam::ACCOUNT_ID:role/aws-service-role/config.amazonaws.com/AWSServiceRoleForConfig","recordingGroup":{"allSupported":true,"includeGlobalResourceTypes":true}}'
+```
+
+#### AWS Config Aggregator (Required)
+
+Advanced Queries require an aggregator, even for single-account setups.
+
+```bash
+# Check if one exists
+aws configservice describe-configuration-aggregators
+
+# Create one if empty
+aws configservice put-configuration-aggregator \
+  --configuration-aggregator-name blast-radius-aggregator \
+  --account-aggregation-sources '[{"AccountIds":["ACCOUNT_ID"],"AllAwsRegions":true}]'
+```
+
+#### Resource Explorer (Required)
+
+Used for cross-account and cross-region dependency discovery.
+
+```bash
+# Check status
+aws resource-explorer-2 get-index
+
+# Enable if not active
+aws resource-explorer-2 create-index --type LOCAL
+```
+
+#### CDK Bootstrap (Required)
+
+```bash
+npx cdk bootstrap aws://ACCOUNT_ID/REGION
+```
+
+#### Amazon Bedrock (Optional — for AI summaries)
+
+If you want natural language risk summaries, enable Claude 4.5 Haiku access in the Bedrock console (Settings → Model access). Check availability:
+
+```bash
+aws bedrock get-foundation-model-availability --model-id anthropic.claude-haiku-4-5-20251001-v1:0
+```
+
+The `authorizationStatus` should be `AUTHORIZED`. If not, request access in the AWS Console under Amazon Bedrock → Model access.
 
 ### Installation
 
@@ -164,10 +219,17 @@ All endpoints require IAM (SigV4) authentication.
 The React frontend is served via CloudFront and provides:
 - Interactive dependency graph with zoom, pan, and node selection
 - Color-coded nodes: Critical (red), High (orange), Medium (yellow), Low (green)
+- Dynamic node sizing based on impact score
+- Hover highlighting (dims unconnected nodes to trace paths)
+- Multiple layout options (Auto, Hierarchical, Force, Circle, Grid)
+- Animated edge flow showing dependency direction
+- Floating legend explaining colors and sizes
+- Clickable risk summary cards that filter the view
 - Filter by risk category, resource type, and source IaC tool
-- Sortable tabular view with pagination (50 per page)
-- JSON and PDF export
+- Sortable tabular view with expandable rows (click for full ARN + dependency chain)
+- JSON and PDF export (real PDF with jsPDF)
 - Real-time progress polling during analysis
+- Dark/light mode toggle (persists to localStorage)
 
 ## Risk Scoring
 
@@ -192,17 +254,38 @@ Impact_Score = (depthScore × 0.30) + (criticalityScore × 0.40) + (changeTypeSe
 ## Infrastructure Deployment
 
 ```bash
+# Build all packages
+npm run build
+
+# Deploy the stack
 cd packages/infra
-npx cdk deploy BlastRadiusStack
+npx cdk deploy --require-approval never
+
+# Deploy the frontend to S3
+VITE_API_BASE_URL=<API_URL_FROM_OUTPUT> npm run build --workspace=packages/frontend
+aws s3 sync packages/frontend/dist/ s3://<FRONTEND_BUCKET_FROM_OUTPUT>/ --delete
 ```
 
 The CDK stack provisions:
 - 14 Lambda functions (Node.js 20, ARM64, X-Ray tracing)
 - 2 DynamoDB tables (adapter registry, analysis status)
 - S3 bucket with lifecycle policies (90-day expiration)
-- API Gateway REST API with SigV4 authorization
+- API Gateway REST API with SigV4 authorization (29s timeout)
 - Step Functions state machine with retry policies
 - CloudFront distribution for the frontend
+- CloudWatch log groups (2-week retention) and alarms
+
+**Stack Outputs after deployment:**
+
+| Output | Description |
+|--------|-------------|
+| `ApiGatewayApiUrl` | REST API endpoint (SigV4 auth required) |
+| `DistributionDomainName` | CloudFront URL for the frontend |
+| `FrontendBucketName` | S3 bucket to upload frontend assets |
+| `ResultsBucketName` | S3 bucket for analysis results |
+| `StateMachineArn` | Step Functions pipeline ARN |
+
+**Note:** The API requires SigV4 authentication. The frontend served via CloudFront cannot sign requests from the browser without an auth layer (Cognito, API keys, or a proxy). For demos, use the mock server or the CLI with AWS credentials.
 - CloudWatch log groups and alarms
 
 ### Stack Configuration

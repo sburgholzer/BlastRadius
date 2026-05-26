@@ -315,7 +315,7 @@ This pattern eliminates the need for module mocking and makes tests deterministi
 | `STATUS_TABLE` | status, failure-handler, results | DynamoDB table for analysis status |
 | `RESULTS_BUCKET` | visualization-prep, risk-summary, failure-handler, results | S3 bucket for analysis results |
 | `ENABLE_BEDROCK_SUMMARY` | risk-summary | Feature flag for Bedrock summary generation (`true`/`1`) |
-| `BEDROCK_MODEL_ID` | risk-summary | Bedrock model ID (default: `anthropic.claude-3-haiku-20240307-v1:0`) |
+| `BEDROCK_MODEL_ID` | risk-summary | Bedrock model ID (default: `anthropic.claude-haiku-4-5-20251001-v1:0`) |
 | `STATE_MACHINE_ARN` | analyze | Step Functions state machine ARN |
 
 ---

@@ -113,7 +113,7 @@ export class BlastRadiusStack extends cdk.Stack {
 
     // ─── Lambda Functions ──────────────────────────────────────────────
 
-    const lambdasDistPath = path.join(__dirname, '..', '..', '..', 'lambdas', 'dist');
+    const lambdasDistPath = path.join(__dirname, '..', '..', '..', '..', 'lambdas', 'dist');
     const lambdaCode = lambda.Code.fromAsset(lambdasDistPath);
     const sharedRuntime = lambda.Runtime.NODEJS_20_X;
     const sharedArchitecture = lambda.Architecture.ARM_64;

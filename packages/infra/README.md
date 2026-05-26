@@ -7,7 +7,13 @@ AWS CDK infrastructure for the Blast Radius Pre-Deploy Visualizer. Defines all c
 - Node.js 20+
 - AWS CDK CLI (`npm install -g aws-cdk`)
 - AWS credentials configured (`aws configure` or environment variables)
-- Bootstrapped CDK environment (`cdk bootstrap`)
+- Bootstrapped CDK environment (`cdk bootstrap aws://ACCOUNT/REGION`)
+- **AWS Config** enabled and recording all resource types (or at minimum: EC2, RDS, Lambda, ECS, ELB, S3, IAM, VPC)
+- **AWS Config Aggregator** created (required for Advanced Queries)
+- **Resource Explorer** index active in the deployment region
+- **Amazon Bedrock** model access for Claude 4.5 Haiku (optional, for AI summaries)
+
+See the [root README prerequisites](../../README.md#prerequisites) for setup commands.
 
 ---
 

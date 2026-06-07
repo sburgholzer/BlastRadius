@@ -6,6 +6,7 @@ Lambda function handlers for the Blast Radius analysis pipeline. Each handler is
 
 | Handler | Purpose | AWS Services | Memory | Timeout |
 |---------|---------|-------------|--------|---------|
+| **api** | **HTTP router — bridges API Gateway to the pipeline** | **DynamoDB, S3, Step Functions** | **256 MB** | **29s** |
 | ingestion | Validate manifest, flatten hierarchy, generate analysis ID | — | 256 MB | 30s |
 | adapter-registry | Route changesets to format-specific adapters | DynamoDB, Lambda | 256 MB | 30s |
 | adapters/cloudformation | Convert CloudFormation changesets to canonical format | — | 256 MB | 30s |
@@ -18,6 +19,8 @@ Lambda function handlers for the Blast Radius analysis pipeline. Each handler is
 | status | Get/update analysis status in DynamoDB | DynamoDB | 256 MB | 10s |
 | pipeline/failure-handler | Store partial results on pipeline failure | S3, DynamoDB | 256 MB | 30s |
 | results | Authorization-aware result retrieval | DynamoDB, S3 | 256 MB | 30s |
+
+The **api** handler is the only one called by API Gateway. All other handlers are called by Step Functions internally.
 
 ---
 

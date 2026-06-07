@@ -4,7 +4,7 @@ AWS CDK infrastructure for the Blast Radius Pre-Deploy Visualizer. Defines all c
 
 ## Prerequisites
 
-- Node.js 20+
+- Node.js 22+
 - AWS CDK CLI (`npm install -g aws-cdk`)
 - AWS credentials configured (`aws configure` or environment variables)
 - Bootstrapped CDK environment (`cdk bootstrap aws://ACCOUNT/REGION`)
@@ -148,7 +148,7 @@ The complete stack assembling all resources.
 | BlastRadius-Analyze | 256 MB | 30s | API entry point |
 | BlastRadius-Formats | 128 MB | 10s | List supported formats |
 
-All functions use: Node.js 20, ARM64 architecture, X-Ray tracing enabled.
+All functions use: Node.js 22, ARM64 architecture, X-Ray tracing enabled.
 
 ### DynamoDB Tables (2)
 

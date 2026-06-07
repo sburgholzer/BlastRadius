@@ -177,7 +177,7 @@ function validateResourceChange(
  * 4. Skips no-op and read actions.
  * 5. Returns error with location for malformed input.
  */
-export function handler(event: unknown): TerraformAdapterResult {
+export async function handler(event: unknown): Promise<TerraformAdapterResult> {
   // Validate top-level structure
   if (!validateTerraformPlan(event)) {
     const detail = event === null || typeof event !== 'object'

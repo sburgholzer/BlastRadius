@@ -5,13 +5,44 @@ A guided tour of the Blast Radius codebase, following the data flow from user su
 ## The Big Picture
 
 ```
-User submits changeset
-    → Adapter converts to canonical format
-        → Validator checks the manifest
-            → Resource Resolver discovers dependencies (AWS Config)
-                → Risk Assessor scores each resource
-                    → Visualization Prep formats for frontend
-                        → User sees interactive graph
+User submits changeset (via CLI or frontend)
+    → API Gateway receives request
+    → Step Functions pipeline starts:
+        → Is format "canonical"?
+            No → Adapter converts to canonical format
+            Yes → Skip adapter
+        → Ingestion validates the manifest
+        → Progress update (20%)
+        → Resource Resolver discovers dependencies (AWS Config)
+        → Progress update (40%)
+        → Risk Assessor scores each resource
+        → Progress update (60%)
+        → Visualization Prep formats for frontend + S3
+        → Progress update (80%)
+        → Is enableSummary = true?
+            Yes → Risk Summary generates AI explanation
+            No → Skip summary
+        → Mark analysis complete (100%)
+    → User sees interactive graph + AI summary
+```
+
+## Pipeline Error Handling
+
+Every task state in the pipeline catches `States.ALL` errors. On failure:
+1. `UpdateStatusFailed` — invokes the status Lambda to mark the analysis as "failed" in DynamoDB
+2. `PipelineFailed` — the Fail state terminates the execution
+
+This guarantees the frontend never shows a permanently "running" analysis.
+
+## State Preservation Between Steps
+
+The pipeline uses `resultPath` (not `outputPath`) for Discovery, Scoring, and VisualizationPrep. This preserves the full state object while adding each step's output under a new key:
+
+```
+After Ingestion:    { analysisId, sourceFormat, validatedManifest, options }
+After Discovery:    { ...above, discoveryResult: { dependencyGraph, coverage } }
+After Scoring:      { ...above, scoringResult: { scoredResources, riskSummary } }
+After VisPrep:      { ...above, visualizationResult: { ... } }
 ```
 
 ## Table of Contents

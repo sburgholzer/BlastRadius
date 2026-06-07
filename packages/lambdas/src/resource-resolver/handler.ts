@@ -10,15 +10,13 @@
  */
 
 import type {
-  ConfigServiceClient,
   SelectAggregateResourceConfigCommandOutput,
 } from '@aws-sdk/client-config-service';
 import type {
-  ResourceExplorer2Client,
   SearchCommandOutput,
 } from '@aws-sdk/client-resource-explorer-2';
-import { SelectAggregateResourceConfigCommand } from '@aws-sdk/client-config-service';
-import { SearchCommand } from '@aws-sdk/client-resource-explorer-2';
+import { ConfigServiceClient, SelectAggregateResourceConfigCommand } from '@aws-sdk/client-config-service';
+import { ResourceExplorer2Client, SearchCommand } from '@aws-sdk/client-resource-explorer-2';
 import type {
   ResourceChange,
   DependencyGraph,
@@ -31,11 +29,16 @@ import { LRUCache } from '@blast-radius/core';
 // ─── Interfaces ──────────────────────────────────────────────────────────────
 
 export interface ResolverInput {
-  resources: ResourceChange[];
-  maxDepth: number;
-  requestingPrincipal: string;
+  resources?: ResourceChange[];
+  validatedManifest?: { resources: ResourceChange[]; [key: string]: unknown };
+  maxDepth?: number;
+  options?: { maxDepth?: number; [key: string]: unknown };
+  requestingPrincipal?: string;
   authorizedAccounts?: string[];
   authorizedRegions?: string[];
+  analysisId?: string;
+  sourceFormat?: string;
+  resourceCount?: number;
 }
 
 export interface CoverageReport {
@@ -73,6 +76,16 @@ const DEFAULT_MAX_DEPTH = 5;
 const CACHE_MAX_SIZE = 10_000;
 const MAX_RETRIES = 3;
 const BASE_BACKOFF_MS = 1000;
+
+const CONFIG_AGGREGATOR_NAME = process.env.CONFIG_AGGREGATOR_NAME ?? 'default';
+
+function createDefaultDeps(): ResolverDeps {
+  return {
+    configClient: new ConfigServiceClient({}),
+    resourceExplorerClient: new ResourceExplorer2Client({}),
+    configAggregatorName: CONFIG_AGGREGATOR_NAME,
+  };
+}
 
 // ─── Helper: Retry with exponential backoff ──────────────────────────────────
 
@@ -146,6 +159,7 @@ async function queryConfigRelationships(
         const parsed = JSON.parse(resultStr);
         if (parsed.relationships && Array.isArray(parsed.relationships)) {
           for (const rel of parsed.relationships) {
+            if (!rel.resourceId) continue;
             results.push({
               resourceId: rel.resourceId,
               resourceType: rel.resourceType ?? 'Unknown',
@@ -341,6 +355,11 @@ async function traverseDependencies(
       continue;
     }
 
+    // Skip edges with missing target
+    if (!rel.resourceId) {
+      continue;
+    }
+
     // Add edge
     const edge: DependencyEdge = {
       sourceId: resourceId,
@@ -375,9 +394,11 @@ async function traverseDependencies(
  */
 export async function handler(
   event: ResolverInput,
-  deps: ResolverDeps,
+  deps?: ResolverDeps,
 ): Promise<ResolverOutput> {
-  const maxDepth = event.maxDepth ?? DEFAULT_MAX_DEPTH;
+  const resolvedDeps = deps && 'configClient' in deps ? deps : createDefaultDeps();
+  const maxDepth = event.maxDepth ?? event.options?.maxDepth ?? DEFAULT_MAX_DEPTH;
+  const resources = event.resources ?? event.validatedManifest?.resources ?? [];
   const cache = new LRUCache<string, DiscoveredRelationship[]>(CACHE_MAX_SIZE);
 
   const ctx: TraversalContext = {
@@ -385,14 +406,14 @@ export async function handler(
     edges: [],
     visited: new Set(),
     cache,
-    deps,
+    deps: resolvedDeps,
     authorizedAccounts: event.authorizedAccounts,
     authorizedRegions: event.authorizedRegions,
     maxDepth,
   };
 
   // Traverse dependencies for each resource in the manifest
-  for (const resource of event.resources) {
+  for (const resource of resources) {
     await traverseDependencies(
       resource.resourceId,
       resource.resourceType,

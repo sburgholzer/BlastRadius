@@ -207,12 +207,13 @@ blast-radius export --analysis-id <id> --format json
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| POST | `/analyze` | Submit a manifest or native changeset |
+| POST | `/analyze` | Submit a manifest or native changeset, starts the pipeline |
 | GET | `/analyze/{analysisId}` | Get analysis status and results |
 | GET | `/analyze/{analysisId}/export` | Export results as JSON or PDF |
 | GET | `/formats` | List supported adapter formats |
+| GET | `/analyses` | List all analyses |
 
-All endpoints require IAM (SigV4) authentication.
+All routes are handled by a single API Lambda that bridges HTTP requests to the Step Functions pipeline and DynamoDB/S3. Authentication is configurable (IAM SigV4 for production, open for demos).
 
 ### Frontend
 
@@ -267,7 +268,7 @@ aws s3 sync packages/frontend/dist/ s3://<FRONTEND_BUCKET_FROM_OUTPUT>/ --delete
 ```
 
 The CDK stack provisions:
-- 14 Lambda functions (Node.js 20, ARM64, X-Ray tracing)
+- 14 Lambda functions (Node.js 22, ARM64, X-Ray tracing, esbuild-bundled)
 - 2 DynamoDB tables (adapter registry, analysis status)
 - S3 bucket with lifecycle policies (90-day expiration)
 - API Gateway REST API with SigV4 authorization (29s timeout)
@@ -279,14 +280,29 @@ The CDK stack provisions:
 
 | Output | Description |
 |--------|-------------|
-| `ApiGatewayApiUrl` | REST API endpoint (SigV4 auth required) |
+| `ApiGatewayApiUrl` | REST API endpoint |
 | `DistributionDomainName` | CloudFront URL for the frontend |
 | `FrontendBucketName` | S3 bucket to upload frontend assets |
 | `ResultsBucketName` | S3 bucket for analysis results |
 | `StateMachineArn` | Step Functions pipeline ARN |
 
-**Note:** The API requires SigV4 authentication. The frontend served via CloudFront cannot sign requests from the browser without an auth layer (Cognito, API keys, or a proxy). For demos, use the mock server or the CLI with AWS credentials.
-- CloudWatch log groups and alarms
+### Stack Configuration
+
+```typescript
+new BlastRadiusStack(app, 'BlastRadiusStack', {
+  enableBedrockSummary: true,   // Enable AI-powered risk summaries
+  resultsRetentionDays: 90,     // S3 lifecycle expiration
+  enableAuth: false,            // Set to true for production (SigV4), false for demos (open)
+});
+```
+
+| Prop | Default | Description |
+|------|---------|-------------|
+| `enableBedrockSummary` | `false` | Enable Bedrock-powered natural language summaries |
+| `resultsRetentionDays` | `90` | Days before analysis results expire in S3 |
+| `enableAuth` | `true` | Enable IAM SigV4 auth on API. Set `false` for browser-accessible demos |
+
+**Demo mode (`enableAuth: false`):** Removes IAM auth and enables CORS so the frontend can call the API directly from the browser. Anyone with the URL can access the API — use only for demos.
 
 ### Stack Configuration
 

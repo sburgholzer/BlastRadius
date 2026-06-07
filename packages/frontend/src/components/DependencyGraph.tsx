@@ -94,7 +94,6 @@ function getRiskCategory(
 ): RiskCategory {
   const scored = scoredMap.get(node.resourceId);
   if (scored) return scored.riskCategory;
-  if (node.isDirectChange) return 'Critical';
   return 'Low';
 }
 
@@ -194,7 +193,7 @@ export function DependencyGraph({
         resourceId: node.resourceId,
         resourceType: node.resourceType,
         impactScore: scored?.impactScore ?? 0,
-        riskCategory: scored?.riskCategory ?? (node.isDirectChange ? 'Critical' : 'Low'),
+        riskCategory: scored?.riskCategory ?? 'Low',
         dependencyChain: scored?.dependencyChain ?? [node.resourceId],
         region: node.region,
         accountId: node.accountId,
@@ -295,6 +294,7 @@ export function DependencyGraph({
               return s ? 35 + (s / 100) * 35 : 30;
             }) as unknown as number,
             'background-color': ((ele: cytoscape.NodeSingular) => {
+              if (ele.data('isDirectChange')) return '#2b6cb0';
               const category = ele.data('riskCategory') as RiskCategory;
               return RISK_COLORS[category] || RISK_COLORS.Low;
             }) as unknown as string,

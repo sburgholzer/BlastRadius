@@ -1,0 +1,206 @@
+{
+    "Changes": [
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Modify",
+                "LogicalResourceId": "AuroraClusterWriterAA1AB06C",
+                "PhysicalResourceId": "blastradiusdemobaseline-auroraclusterwriteraa1ab06-zhmuw13ylzyo",
+                "ResourceType": "AWS::RDS::DBInstance",
+                "Replacement": "False",
+                "Scope": [
+                    "Properties"
+                ],
+                "Details": [
+                    {
+                        "Target": {
+                            "Attribute": "Properties",
+                            "Name": "DBInstanceClass",
+                            "RequiresRecreation": "Never"
+                        },
+                        "Evaluation": "Static",
+                        "ChangeSource": "DirectModification"
+                    }
+                ]
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Modify",
+                "LogicalResourceId": "BackgroundProcessorF9328D71",
+                "PhysicalResourceId": "BlastRadiusDemoBaseline-BackgroundProcessorF9328D7-ZJ5ZHYrP2yEk",
+                "ResourceType": "AWS::Lambda::Function",
+                "Replacement": "False",
+                "Scope": [
+                    "Properties"
+                ],
+                "Details": [
+                    {
+                        "Target": {
+                            "Attribute": "Properties",
+                            "Name": "VpcConfig",
+                            "RequiresRecreation": "Never"
+                        },
+                        "Evaluation": "Dynamic",
+                        "ChangeSource": "ResourceAttribute",
+                        "CausingEntity": "WebSecurityGroup73AF7387.GroupId"
+                    }
+                ]
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Modify",
+                "LogicalResourceId": "DatabaseSecurityGroupfromBlastRadiusDemoBaselineWebSecurityGroup6CEEA2A05432F74BECE6",
+                "PhysicalResourceId": "sgr-0d0d24c1d0de38f24",
+                "ResourceType": "AWS::EC2::SecurityGroupIngress",
+                "Replacement": "Conditional",
+                "Scope": [
+                    "Properties"
+                ],
+                "Details": [
+                    {
+                        "Target": {
+                            "Attribute": "Properties",
+                            "Name": "SourceSecurityGroupId",
+                            "RequiresRecreation": "Always"
+                        },
+                        "Evaluation": "Dynamic",
+                        "ChangeSource": "ResourceAttribute",
+                        "CausingEntity": "WebSecurityGroup73AF7387.GroupId"
+                    }
+                ]
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Modify",
+                "LogicalResourceId": "WebSecurityGroup73AF7387",
+                "PhysicalResourceId": "sg-0da0b5bd8c4a50945",
+                "ResourceType": "AWS::EC2::SecurityGroup",
+                "Replacement": "False",
+                "Scope": [
+                    "Properties"
+                ],
+                "Details": [
+                    {
+                        "Target": {
+                            "Attribute": "Properties",
+                            "Name": "SecurityGroupIngress",
+                            "RequiresRecreation": "Never"
+                        },
+                        "Evaluation": "Static",
+                        "ChangeSource": "DirectModification"
+                    }
+                ]
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Modify",
+                "LogicalResourceId": "WebSecurityGroupfromBlastRadiusDemoBaselineWebServiceLBSecurityGroupF31EBE6F8089420897",
+                "PhysicalResourceId": "sgr-00f0e3eb8f98e0671",
+                "ResourceType": "AWS::EC2::SecurityGroupIngress",
+                "Replacement": "Conditional",
+                "Scope": [
+                    "Properties"
+                ],
+                "Details": [
+                    {
+                        "Target": {
+                            "Attribute": "Properties",
+                            "Name": "GroupId",
+                            "RequiresRecreation": "Always"
+                        },
+                        "Evaluation": "Dynamic",
+                        "ChangeSource": "ResourceAttribute",
+                        "CausingEntity": "WebSecurityGroup73AF7387.GroupId"
+                    }
+                ]
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Modify",
+                "LogicalResourceId": "WebService5EA589E6",
+                "PhysicalResourceId": "arn:aws:ecs:us-east-1:136347816899:service/blast-radius-demo-cluster/BlastRadiusDemoBaseline-WebService5EA589E6-y2uxfmIHkk22",
+                "ResourceType": "AWS::ECS::Service",
+                "Replacement": "False",
+                "Scope": [
+                    "Properties"
+                ],
+                "Details": [
+                    {
+                        "Target": {
+                            "Attribute": "Properties",
+                            "Name": "NetworkConfiguration",
+                            "RequiresRecreation": "Never"
+                        },
+                        "Evaluation": "Dynamic",
+                        "ChangeSource": "ResourceAttribute",
+                        "CausingEntity": "WebSecurityGroup73AF7387.GroupId"
+                    }
+                ]
+            }
+        },
+        {
+            "Type": "Resource",
+            "ResourceChange": {
+                "Action": "Modify",
+                "LogicalResourceId": "WebServiceLBSecurityGrouptoBlastRadiusDemoBaselineWebSecurityGroup6CEEA2A080F5FE2FAF",
+                "PhysicalResourceId": "sgr-00242f6aa11795e05",
+                "ResourceType": "AWS::EC2::SecurityGroupEgress",
+                "Replacement": "Conditional",
+                "Scope": [
+                    "Properties"
+                ],
+                "Details": [
+                    {
+                        "Target": {
+                            "Attribute": "Properties",
+                            "Name": "DestinationSecurityGroupId",
+                            "RequiresRecreation": "Always"
+                        },
+                        "Evaluation": "Dynamic",
+                        "ChangeSource": "ResourceAttribute",
+                        "CausingEntity": "WebSecurityGroup73AF7387.GroupId"
+                    }
+                ]
+            }
+        }
+    ],
+    "ChangeSetName": "blast-radius-analysis",
+    "ChangeSetId": "arn:aws:cloudformation:us-east-1:136347816899:changeSet/blast-radius-analysis/7e6a4167-257b-459f-914d-95c6ce1c7090",
+    "StackId": "arn:aws:cloudformation:us-east-1:136347816899:stack/BlastRadiusDemoBaseline/be8f50a0-5938-11f1-8a34-0affc0fb1ed1",
+    "StackName": "BlastRadiusDemoBaseline",
+    "Description": null,
+    "Parameters": [
+        {
+            "ParameterKey": "BootstrapVersion",
+            "ParameterValue": "/cdk-bootstrap/hnb659fds/version",
+            "ResolvedValue": "32"
+        }
+    ],
+    "CreationTime": "2026-05-26T19:47:15.029000+00:00",
+    "ExecutionStatus": "AVAILABLE",
+    "Status": "CREATE_COMPLETE",
+    "StatusReason": null,
+    "NotificationARNs": [],
+    "RollbackConfiguration": {},
+    "Capabilities": [
+        "CAPABILITY_IAM"
+    ],
+    "Tags": null,
+    "ParentChangeSetId": null,
+    "IncludeNestedStacks": false,
+    "RootChangeSetId": null,
+    "OnStackFailure": null,
+    "ImportExistingResources": null,
+    "StackDriftStatus": null,
+    "DeploymentMode": null
+}

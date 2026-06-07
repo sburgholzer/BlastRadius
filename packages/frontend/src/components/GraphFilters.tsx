@@ -6,6 +6,7 @@ export interface GraphFilterState {
   riskCategories: Set<RiskCategory>;
   resourceTypes: Set<string>;
   sourceTools: Set<string>;
+  showDirectChanges: boolean;
 }
 
 /** Props for the GraphFilters component. */
@@ -72,6 +73,7 @@ export function GraphFilters({
     riskCategories: new Set(),
     resourceTypes: new Set(),
     sourceTools: new Set(),
+    showDirectChanges: true,
   });
 
   // Derive available resource types from the data
@@ -164,6 +166,7 @@ export function GraphFilters({
       riskCategories: new Set(),
       resourceTypes: new Set(),
       sourceTools: new Set(),
+      showDirectChanges: true,
     };
     setFilters(cleared);
     applyAndNotify(cleared);
@@ -172,7 +175,8 @@ export function GraphFilters({
   const activeFilterCount =
     filters.riskCategories.size +
     filters.resourceTypes.size +
-    filters.sourceTools.size;
+    filters.sourceTools.size +
+    (filters.showDirectChanges ? 0 : 1);
 
   const chipStyle = (active: boolean, color?: string): React.CSSProperties => ({
     display: 'inline-flex',
@@ -208,6 +212,28 @@ export function GraphFilters({
       <span style={{ fontSize: '0.625rem', color: 'var(--color-text-muted, #64748b)' }}>
         (click to toggle)
       </span>
+
+      {/* Direct Change toggle */}
+      <label style={chipStyle(filters.showDirectChanges, '#2b6cb0')}>
+        <input
+          type="checkbox"
+          checked={filters.showDirectChanges}
+          onChange={() => {
+            setFilters((prev) => {
+              const newFilters = { ...prev, showDirectChanges: !prev.showDirectChanges };
+              applyAndNotify(newFilters);
+              return newFilters;
+            });
+          }}
+          aria-label="Toggle direct changes visibility"
+          style={{ display: 'none' }}
+        />
+        <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#2b6cb0' }} />
+        Direct Changes
+      </label>
+
+      {/* Separator */}
+      <span style={{ width: 1, height: 20, background: 'var(--color-border, #334155)' }} />
 
       {/* Risk Category chips */}
       {ALL_RISK_CATEGORIES.map((category) => (

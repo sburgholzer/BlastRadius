@@ -22,6 +22,10 @@ import type {
   AnalysisStatus,
   VerdictResult,
 } from '@blast-radius/core';
+import { handleCdkDiff } from './cdk-diff.js';
+import type { CdkDiffOptions } from './cdk-diff.js';
+import { handleGenerate } from './generate.js';
+import type { GenerateOptions } from './generate.js';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -30,6 +34,7 @@ export interface AnalyzeOptions {
   input?: string;
   threshold?: number;
   ci?: boolean;
+  enableSummary?: boolean;
 }
 
 export interface StatusOptions {
@@ -306,15 +311,20 @@ function formatAnalysisHuman(result: AnalysisResult): string {
     `Status: ${result.status}`,
     `Source Format: ${result.sourceFormat}`,
     `Submitted: ${result.submittedAt}`,
-    '',
-    'Risk Summary:',
-    `  Critical: ${result.riskSummary.critical}`,
-    `  High: ${result.riskSummary.high}`,
-    `  Medium: ${result.riskSummary.medium}`,
-    `  Low: ${result.riskSummary.low}`,
-    `  Total Affected: ${result.riskSummary.totalAffected}`,
-    `  Highest Score: ${result.riskSummary.highestScore}`,
   ];
+
+  if (result.riskSummary) {
+    lines.push(
+      '',
+      'Risk Summary:',
+      `  Critical: ${result.riskSummary.critical}`,
+      `  High: ${result.riskSummary.high}`,
+      `  Medium: ${result.riskSummary.medium}`,
+      `  Low: ${result.riskSummary.low}`,
+      `  Total Affected: ${result.riskSummary.totalAffected}`,
+      `  Highest Score: ${result.riskSummary.highestScore}`,
+    );
+  }
 
   if (result.naturalLanguageSummary) {
     lines.push('', 'Summary:', result.naturalLanguageSummary);
@@ -354,6 +364,7 @@ function createDefaultApiClient(baseUrl?: string): ApiClient {
         manifest: payload,
         options: {
           riskThreshold: options.threshold,
+          enableSummary: options.enableSummary ?? true,
         },
       });
 
@@ -459,6 +470,36 @@ export async function main(
       return handleExport(options, client, ci);
     }
 
+    case 'cdk-diff': {
+      const cdkOptions: CdkDiffOptions = {
+        stack: typeof flags.stack === 'string' ? flags.stack : '',
+        app: typeof flags.app === 'string' ? flags.app : undefined,
+        region: typeof flags.region === 'string' ? flags.region : undefined,
+        profile: typeof flags.profile === 'string' ? flags.profile : undefined,
+        threshold:
+          typeof flags.threshold === 'string'
+            ? Number(flags.threshold)
+            : undefined,
+        summary: flags['no-summary'] === true ? false : true,
+        ci,
+      };
+      return handleCdkDiff(cdkOptions, client);
+    }
+
+    case 'generate': {
+      const genOptions: GenerateOptions = {
+        format: typeof flags.format === 'string' ? flags.format : '',
+        output: typeof flags.output === 'string' ? flags.output : '',
+        stack: typeof flags.stack === 'string' ? flags.stack : undefined,
+        app: typeof flags.app === 'string' ? flags.app : undefined,
+        input: typeof flags.input === 'string' ? flags.input : undefined,
+        region: typeof flags.region === 'string' ? flags.region : undefined,
+        profile: typeof flags.profile === 'string' ? flags.profile : undefined,
+        ci,
+      };
+      return handleGenerate(genOptions);
+    }
+
     default:
       return formatError(
         [
@@ -466,8 +507,12 @@ export async function main(
           '',
           'Usage:',
           '  blast-radius analyze [--format <format>] [--input <file>] [--threshold <0-100>] [--ci]',
+          '  blast-radius cdk-diff --stack <name> [--app <cmd>] [--threshold <0-100>] [--ci]',
+          '  blast-radius generate --format <format> --output <file> [--stack <name>] [--input <file>]',
           '  blast-radius status --analysis-id <id>',
           '  blast-radius export --analysis-id <id> [--format json|pdf]',
+          '',
+          'Formats: canonical, cloudformation, terraform-plan, cdk',
           '',
           'Exit codes:',
           '  0 = pass (no resource exceeds threshold)',

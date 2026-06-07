@@ -1,5 +1,6 @@
 import * as cdk from 'aws-cdk-lib';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
+import * as lambdaNodejs from 'aws-cdk-lib/aws-lambda-nodejs';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
@@ -20,6 +21,8 @@ export interface BlastRadiusStackProps extends cdk.StackProps {
   enableBedrockSummary?: boolean;
   /** S3 results bucket lifecycle expiration in days. Default: 90 */
   resultsRetentionDays?: number;
+  /** Enable IAM (SigV4) authentication on the API. Set to false for demos. Default: true */
+  enableAuth?: boolean;
 }
 
 /**
@@ -60,7 +63,7 @@ export class BlastRadiusStack extends cdk.Stack {
       partitionKey: { name: 'formatId', type: dynamodb.AttributeType.STRING },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
       removalPolicy: cdk.RemovalPolicy.RETAIN,
-      pointInTimeRecovery: true,
+      pointInTimeRecoverySpecification: { pointInTimeRecoveryEnabled: true },
     });
 
     const analysisStatusTable = new dynamodb.Table(this, 'AnalysisStatusTable', {
@@ -68,7 +71,7 @@ export class BlastRadiusStack extends cdk.Stack {
       partitionKey: { name: 'analysisId', type: dynamodb.AttributeType.STRING },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
       removalPolicy: cdk.RemovalPolicy.RETAIN,
-      pointInTimeRecovery: true,
+      pointInTimeRecoverySpecification: { pointInTimeRecoveryEnabled: true },
       timeToLiveAttribute: 'ttl',
     });
 
@@ -113,166 +116,187 @@ export class BlastRadiusStack extends cdk.Stack {
 
     // ─── Lambda Functions ──────────────────────────────────────────────
 
-    const lambdasDistPath = path.join(__dirname, '..', '..', '..', '..', 'lambdas', 'dist');
-    const lambdaCode = lambda.Code.fromAsset(lambdasDistPath);
-    const sharedRuntime = lambda.Runtime.NODEJS_20_X;
+    const lambdasSrcPath = path.join(__dirname, '..', '..', '..', '..', 'lambdas', 'src');
+    const sharedRuntime = lambda.Runtime.NODEJS_22_X;
     const sharedArchitecture = lambda.Architecture.ARM_64;
     const sharedTracing = lambda.Tracing.ACTIVE;
 
+    const sharedBundling: lambdaNodejs.BundlingOptions = {
+      minify: true,
+      sourceMap: true,
+      target: 'node22',
+      externalModules: [], // Bundle everything including AWS SDK
+    };
+
     // Manifest Ingestion Lambda
-    const ingestionFunction = new lambda.Function(this, 'IngestionFunction', {
+    const ingestionFunction = new lambdaNodejs.NodejsFunction(this, 'IngestionFunction', {
+      entry: path.join(lambdasSrcPath, 'ingestion', 'handler.ts'),
+      handler: 'handler',
       runtime: sharedRuntime,
       architecture: sharedArchitecture,
       tracing: sharedTracing,
       functionName: 'BlastRadius-Ingestion',
-      handler: 'ingestion/handler.handler',
-      code: lambdaCode,
       memorySize: 256,
       timeout: cdk.Duration.seconds(30),
       description: 'Validates and ingests resource change manifests',
       environment: {
         ANALYSIS_STATUS_TABLE: analysisStatusTable.tableName,
       },
+      bundling: sharedBundling,
     });
 
     // Adapter Registry Lambda
-    const adapterRegistryFunction = new lambda.Function(this, 'AdapterRegistryFunction', {
+    const adapterRegistryFunction = new lambdaNodejs.NodejsFunction(this, 'AdapterRegistryFunction', {
+      entry: path.join(lambdasSrcPath, 'adapter-registry', 'handler.ts'),
+      handler: 'handler',
       runtime: sharedRuntime,
       architecture: sharedArchitecture,
       tracing: sharedTracing,
       functionName: 'BlastRadius-AdapterRegistry',
-      handler: 'adapter-registry/handler.handler',
-      code: lambdaCode,
       memorySize: 256,
       timeout: cdk.Duration.seconds(30),
       description: 'Routes changesets to the appropriate manifest adapter',
       environment: {
         ADAPTER_REGISTRY_TABLE: adapterRegistryTable.tableName,
       },
+      bundling: sharedBundling,
     });
 
     // CloudFormation Adapter Lambda
-    const cloudFormationAdapterFunction = new lambda.Function(this, 'CloudFormationAdapterFunction', {
+    const cloudFormationAdapterFunction = new lambdaNodejs.NodejsFunction(this, 'CloudFormationAdapterFunction', {
+      entry: path.join(lambdasSrcPath, 'adapters', 'cloudformation', 'handler.ts'),
+      handler: 'handler',
       runtime: sharedRuntime,
       architecture: sharedArchitecture,
       tracing: sharedTracing,
       functionName: 'BlastRadius-Adapter-CloudFormation',
-      handler: 'adapters/cloudformation/handler.handler',
-      code: lambdaCode,
       memorySize: 256,
       timeout: cdk.Duration.seconds(30),
       description: 'Converts CloudFormation changesets to canonical manifest format',
+      bundling: sharedBundling,
     });
 
     // Terraform Adapter Lambda
-    const terraformAdapterFunction = new lambda.Function(this, 'TerraformAdapterFunction', {
+    const terraformAdapterFunction = new lambdaNodejs.NodejsFunction(this, 'TerraformAdapterFunction', {
+      entry: path.join(lambdasSrcPath, 'adapters', 'terraform', 'handler.ts'),
+      handler: 'handler',
       runtime: sharedRuntime,
       architecture: sharedArchitecture,
       tracing: sharedTracing,
       functionName: 'BlastRadius-Adapter-Terraform',
-      handler: 'adapters/terraform/handler.handler',
-      code: lambdaCode,
       memorySize: 256,
       timeout: cdk.Duration.seconds(30),
       description: 'Converts Terraform plan JSON to canonical manifest format',
+      bundling: sharedBundling,
     });
 
     // CDK Adapter Lambda
-    const cdkAdapterFunction = new lambda.Function(this, 'CdkAdapterFunction', {
+    const cdkAdapterFunction = new lambdaNodejs.NodejsFunction(this, 'CdkAdapterFunction', {
+      entry: path.join(lambdasSrcPath, 'adapters', 'cdk', 'handler.ts'),
+      handler: 'handler',
       runtime: sharedRuntime,
       architecture: sharedArchitecture,
       tracing: sharedTracing,
       functionName: 'BlastRadius-Adapter-CDK',
-      handler: 'adapters/cdk/handler.handler',
-      code: lambdaCode,
       memorySize: 256,
       timeout: cdk.Duration.seconds(30),
       description: 'Converts CDK cloud assembly diffs to canonical manifest format',
+      bundling: sharedBundling,
     });
 
     // Resource Resolver Lambda
-    const resourceResolverFunction = new lambda.Function(this, 'ResourceResolverFunction', {
+    const resourceResolverFunction = new lambdaNodejs.NodejsFunction(this, 'ResourceResolverFunction', {
+      entry: path.join(lambdasSrcPath, 'resource-resolver', 'handler.ts'),
+      handler: 'handler',
       runtime: sharedRuntime,
       architecture: sharedArchitecture,
       tracing: sharedTracing,
       functionName: 'BlastRadius-ResourceResolver',
-      handler: 'resource-resolver/handler.handler',
-      code: lambdaCode,
       memorySize: 1024,
       timeout: cdk.Duration.seconds(90),
       description: 'Discovers resource dependencies via AWS Config and Resource Explorer',
+      environment: {
+        CONFIG_AGGREGATOR_NAME: 'blast-radius-aggregator',
+      },
+      bundling: sharedBundling,
     });
 
     // Risk Assessor Lambda
-    const riskAssessorFunction = new lambda.Function(this, 'RiskAssessorFunction', {
+    const riskAssessorFunction = new lambdaNodejs.NodejsFunction(this, 'RiskAssessorFunction', {
+      entry: path.join(lambdasSrcPath, 'risk-assessor', 'handler.ts'),
+      handler: 'handler',
       runtime: sharedRuntime,
       architecture: sharedArchitecture,
       tracing: sharedTracing,
       functionName: 'BlastRadius-RiskAssessor',
-      handler: 'risk-assessor/handler.handler',
-      code: lambdaCode,
       memorySize: 512,
       timeout: cdk.Duration.seconds(30),
       description: 'Computes impact scores and classifies risk levels',
+      bundling: sharedBundling,
     });
 
     // Visualization Prep Lambda
-    const visualizationPrepFunction = new lambda.Function(this, 'VisualizationPrepFunction', {
+    const visualizationPrepFunction = new lambdaNodejs.NodejsFunction(this, 'VisualizationPrepFunction', {
+      entry: path.join(lambdasSrcPath, 'visualization-prep', 'handler.ts'),
+      handler: 'handler',
       runtime: sharedRuntime,
       architecture: sharedArchitecture,
       tracing: sharedTracing,
       functionName: 'BlastRadius-VisualizationPrep',
-      handler: 'visualization-prep/handler.handler',
-      code: lambdaCode,
       memorySize: 512,
       timeout: cdk.Duration.seconds(30),
       description: 'Prepares visualization data for frontend rendering',
       environment: {
         RESULTS_BUCKET: this.resultsBucket.bucketName,
       },
+      bundling: sharedBundling,
     });
 
     // Risk Summary Generator Lambda
-    const riskSummaryFunction = new lambda.Function(this, 'RiskSummaryFunction', {
+    const riskSummaryFunction = new lambdaNodejs.NodejsFunction(this, 'RiskSummaryFunction', {
+      entry: path.join(lambdasSrcPath, 'risk-summary', 'handler.ts'),
+      handler: 'handler',
       runtime: sharedRuntime,
       architecture: sharedArchitecture,
       tracing: sharedTracing,
       functionName: 'BlastRadius-RiskSummary',
-      handler: 'risk-summary/handler.handler',
-      code: lambdaCode,
       memorySize: 256,
-      timeout: cdk.Duration.seconds(15),
+      timeout: cdk.Duration.seconds(30),
       description: 'Generates natural language risk summaries via Amazon Bedrock',
       environment: {
         RESULTS_BUCKET: this.resultsBucket.bucketName,
         ENABLE_BEDROCK: enableBedrockSummary ? 'true' : 'false',
+        ENABLE_BEDROCK_SUMMARY: enableBedrockSummary ? 'true' : 'false',
+        BEDROCK_MODEL_ID: 'global.anthropic.claude-haiku-4-5-20251001-v1:0',
       },
+      bundling: sharedBundling,
     });
 
     // Status Lambda
-    const statusFunction = new lambda.Function(this, 'StatusFunction', {
+    const statusFunction = new lambdaNodejs.NodejsFunction(this, 'StatusFunction', {
+      entry: path.join(lambdasSrcPath, 'status', 'handler.ts'),
+      handler: 'handler',
       runtime: sharedRuntime,
       architecture: sharedArchitecture,
       tracing: sharedTracing,
       functionName: 'BlastRadius-Status',
-      handler: 'status/handler.handler',
-      code: lambdaCode,
       memorySize: 256,
       timeout: cdk.Duration.seconds(10),
       description: 'Manages analysis status tracking in DynamoDB',
       environment: {
         ANALYSIS_STATUS_TABLE: analysisStatusTable.tableName,
       },
+      bundling: sharedBundling,
     });
 
     // Pipeline Failure Handler Lambda
-    const failureHandlerFunction = new lambda.Function(this, 'FailureHandlerFunction', {
+    const failureHandlerFunction = new lambdaNodejs.NodejsFunction(this, 'FailureHandlerFunction', {
+      entry: path.join(lambdasSrcPath, 'pipeline', 'failure-handler.ts'),
+      handler: 'handler',
       runtime: sharedRuntime,
       architecture: sharedArchitecture,
       tracing: sharedTracing,
       functionName: 'BlastRadius-FailureHandler',
-      handler: 'pipeline/failure-handler.handler',
-      code: lambdaCode,
       memorySize: 256,
       timeout: cdk.Duration.seconds(30),
       description: 'Handles pipeline failures and stores partial results',
@@ -280,16 +304,17 @@ export class BlastRadiusStack extends cdk.Stack {
         RESULTS_BUCKET: this.resultsBucket.bucketName,
         ANALYSIS_STATUS_TABLE: analysisStatusTable.tableName,
       },
+      bundling: sharedBundling,
     });
 
     // Results Lambda
-    const resultsFunction = new lambda.Function(this, 'ResultsFunction', {
+    const resultsFunction = new lambdaNodejs.NodejsFunction(this, 'ResultsFunction', {
+      entry: path.join(lambdasSrcPath, 'results', 'handler.ts'),
+      handler: 'handler',
       runtime: sharedRuntime,
       architecture: sharedArchitecture,
       tracing: sharedTracing,
       functionName: 'BlastRadius-Results',
-      handler: 'results/handler.handler',
-      code: lambdaCode,
       memorySize: 256,
       timeout: cdk.Duration.seconds(30),
       description: 'Retrieves analysis results with authorization checks',
@@ -297,6 +322,7 @@ export class BlastRadiusStack extends cdk.Stack {
         RESULTS_BUCKET: this.resultsBucket.bucketName,
         ANALYSIS_STATUS_TABLE: analysisStatusTable.tableName,
       },
+      bundling: sharedBundling,
     });
 
     // ─── IAM Permissions (Least-Privilege) ─────────────────────────────
@@ -309,6 +335,53 @@ export class BlastRadiusStack extends cdk.Stack {
     cloudFormationAdapterFunction.grantInvoke(adapterRegistryFunction);
     terraformAdapterFunction.grantInvoke(adapterRegistryFunction);
     cdkAdapterFunction.grantInvoke(adapterRegistryFunction);
+
+    // Seed the adapter registry table with built-in adapters
+    const adapterEntries = [
+      { formatId: 'cloudformation', functionRef: cloudFormationAdapterFunction, displayName: 'CloudFormation Adapter' },
+      { formatId: 'terraform-plan', functionRef: terraformAdapterFunction, displayName: 'Terraform Adapter' },
+      { formatId: 'cdk', functionRef: cdkAdapterFunction, displayName: 'CDK Adapter' },
+    ];
+
+    for (const entry of adapterEntries) {
+      const seedResource = new cdk.custom_resources.AwsCustomResource(this, `SeedAdapter-${entry.formatId}`, {
+        onCreate: {
+          service: 'DynamoDB',
+          action: 'putItem',
+          parameters: {
+            TableName: adapterRegistryTable.tableName,
+            Item: {
+              formatId: { S: entry.formatId },
+              adapterLambdaArn: { S: entry.functionRef.functionArn },
+              displayName: { S: entry.displayName },
+              version: { S: '1.0.0' },
+              registeredAt: { S: new Date().toISOString() },
+            },
+          },
+          physicalResourceId: cdk.custom_resources.PhysicalResourceId.of(`adapter-seed-${entry.formatId}`),
+        },
+        onUpdate: {
+          service: 'DynamoDB',
+          action: 'putItem',
+          parameters: {
+            TableName: adapterRegistryTable.tableName,
+            Item: {
+              formatId: { S: entry.formatId },
+              adapterLambdaArn: { S: entry.functionRef.functionArn },
+              displayName: { S: entry.displayName },
+              version: { S: '1.0.0' },
+              registeredAt: { S: new Date().toISOString() },
+            },
+          },
+          physicalResourceId: cdk.custom_resources.PhysicalResourceId.of(`adapter-seed-${entry.formatId}`),
+        },
+        policy: cdk.custom_resources.AwsCustomResourcePolicy.fromSdkCalls({
+          resources: [adapterRegistryTable.tableArn],
+        }),
+        installLatestAwsSdk: false,
+      });
+      seedResource.node.addDependency(adapterRegistryTable);
+    }
 
     // Resource Resolver: read AWS Config and Resource Explorer
     resourceResolverFunction.addToRolePolicy(new iam.PolicyStatement({
@@ -335,14 +408,18 @@ export class BlastRadiusStack extends cdk.Stack {
     // Visualization Prep: write to results bucket
     this.resultsBucket.grantWrite(visualizationPrepFunction);
 
-    // Risk Summary: invoke Bedrock, write to results bucket
-    this.resultsBucket.grantWrite(riskSummaryFunction);
+    // Risk Summary: invoke Bedrock, read/write to results bucket
+    this.resultsBucket.grantReadWrite(riskSummaryFunction);
     if (enableBedrockSummary) {
       riskSummaryFunction.addToRolePolicy(new iam.PolicyStatement({
         sid: 'AllowBedrockInvoke',
         effect: iam.Effect.ALLOW,
         actions: ['bedrock:InvokeModel'],
-        resources: ['arn:aws:bedrock:*::foundation-model/*'],
+        resources: [
+          'arn:aws:bedrock:*::foundation-model/*',
+          `arn:aws:bedrock:*:${cdk.Aws.ACCOUNT_ID}:inference-profile/*`,
+          'arn:aws:bedrock:*:*:inference-profile/*',
+        ],
       }));
     }
 
@@ -380,51 +457,35 @@ export class BlastRadiusStack extends cdk.Stack {
 
     // ─── API Gateway ───────────────────────────────────────────────────
 
-    // The analyze function needs to start the Step Functions execution
-    const analyzeFunction = new lambda.Function(this, 'AnalyzeFunction', {
+    // Single API handler Lambda (router pattern) for all API Gateway routes
+    const apiFunction = new lambdaNodejs.NodejsFunction(this, 'ApiFunction', {
+      entry: path.join(lambdasSrcPath, 'api', 'handler.ts'),
+      handler: 'handler',
       runtime: sharedRuntime,
       architecture: sharedArchitecture,
       tracing: sharedTracing,
-      functionName: 'BlastRadius-Analyze',
-      handler: 'ingestion/handler.handler',
-      code: lambdaCode,
+      functionName: 'BlastRadius-Api',
       memorySize: 256,
       timeout: cdk.Duration.seconds(30),
-      description: 'API entry point for submitting analysis requests',
+      description: 'Unified API handler for all Blast Radius API routes',
       environment: {
         STATE_MACHINE_ARN: this.pipeline.stateMachine.stateMachineArn,
-        ANALYSIS_STATUS_TABLE: analysisStatusTable.tableName,
+        STATUS_TABLE: analysisStatusTable.tableName,
         ADAPTER_REGISTRY_TABLE: adapterRegistryTable.tableName,
+        RESULTS_BUCKET: this.resultsBucket.bucketName,
       },
+      bundling: sharedBundling,
     });
 
-    // Grant analyze function permission to start Step Functions executions
-    this.pipeline.stateMachine.grantStartExecution(analyzeFunction);
-    analysisStatusTable.grantWriteData(analyzeFunction);
-    adapterRegistryTable.grantReadData(analyzeFunction);
-
-    // Formats Lambda (lists supported adapter formats)
-    const formatsFunction = new lambda.Function(this, 'FormatsFunction', {
-      runtime: sharedRuntime,
-      architecture: sharedArchitecture,
-      tracing: sharedTracing,
-      functionName: 'BlastRadius-Formats',
-      handler: 'adapter-registry/handler.handler',
-      code: lambdaCode,
-      memorySize: 128,
-      timeout: cdk.Duration.seconds(10),
-      description: 'Lists supported adapter formats',
-      environment: {
-        ADAPTER_REGISTRY_TABLE: adapterRegistryTable.tableName,
-      },
-    });
-    adapterRegistryTable.grantReadData(formatsFunction);
+    // Grant API function permissions
+    this.pipeline.stateMachine.grantStartExecution(apiFunction);
+    analysisStatusTable.grantReadWriteData(apiFunction);
+    adapterRegistryTable.grantReadData(apiFunction);
+    this.resultsBucket.grantRead(apiFunction);
 
     this.api = new BlastRadiusApiGateway(this, 'ApiGateway', {
-      analyzeFunction,
-      statusFunction,
-      exportFunction: resultsFunction,
-      formatsFunction,
+      apiFunction,
+      enableAuth: props?.enableAuth ?? true,
     });
 
     // ─── CloudFront Distribution ───────────────────────────────────────
@@ -536,14 +597,8 @@ export class BlastRadiusStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
-    new logs.LogGroup(this, 'AnalyzeLogGroup', {
-      logGroupName: `/aws/lambda/${analyzeFunction.functionName}`,
-      retention: logRetention,
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
-    });
-
-    new logs.LogGroup(this, 'FormatsLogGroup', {
-      logGroupName: `/aws/lambda/${formatsFunction.functionName}`,
+    new logs.LogGroup(this, 'ApiLogGroup', {
+      logGroupName: `/aws/lambda/${apiFunction.functionName}`,
       retention: logRetention,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
@@ -578,11 +633,11 @@ export class BlastRadiusStack extends cdk.Stack {
       treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
     });
 
-    // Alarm: High Lambda error rate on the analyze function (API entry point)
-    new cloudwatch.Alarm(this, 'AnalyzeFunctionErrorAlarm', {
-      alarmName: 'BlastRadius-AnalyzeFunctionErrors',
-      alarmDescription: 'Triggers when the Analyze Lambda function has elevated error rates',
-      metric: analyzeFunction.metricErrors({
+    // Alarm: High Lambda error rate on the API function (API entry point)
+    new cloudwatch.Alarm(this, 'ApiFunctionErrorAlarm', {
+      alarmName: 'BlastRadius-ApiFunctionErrors',
+      alarmDescription: 'Triggers when the API Lambda function has elevated error rates',
+      metric: apiFunction.metricErrors({
         period: cdk.Duration.minutes(5),
         statistic: 'Sum',
       }),
@@ -602,6 +657,42 @@ export class BlastRadiusStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'FrontendBucketName', {
       value: frontendBucket.bucketName,
       description: 'S3 bucket for frontend static assets',
+    });
+
+    // Deploy runtime config to the frontend bucket so it knows the API URL
+    new cdk.custom_resources.AwsCustomResource(this, 'FrontendConfig', {
+      onUpdate: {
+        service: 'S3',
+        action: 'putObject',
+        parameters: {
+          Bucket: frontendBucket.bucketName,
+          Key: 'config.json',
+          Body: JSON.stringify({
+            apiBaseUrl: this.api.api.url,
+          }),
+          ContentType: 'application/json',
+          CacheControl: 'no-cache, no-store, must-revalidate',
+        },
+        physicalResourceId: cdk.custom_resources.PhysicalResourceId.of('frontend-config'),
+      },
+      onCreate: {
+        service: 'S3',
+        action: 'putObject',
+        parameters: {
+          Bucket: frontendBucket.bucketName,
+          Key: 'config.json',
+          Body: JSON.stringify({
+            apiBaseUrl: this.api.api.url,
+          }),
+          ContentType: 'application/json',
+          CacheControl: 'no-cache, no-store, must-revalidate',
+        },
+        physicalResourceId: cdk.custom_resources.PhysicalResourceId.of('frontend-config'),
+      },
+      policy: cdk.custom_resources.AwsCustomResourcePolicy.fromSdkCalls({
+        resources: [frontendBucket.arnForObjects('config.json')],
+      }),
+      installLatestAwsSdk: false,
     });
 
     new cdk.CfnOutput(this, 'DistributionDomainName', {

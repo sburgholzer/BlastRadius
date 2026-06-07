@@ -270,7 +270,7 @@ export async function handler(
   input: VisualizationPrepInput,
   deps?: VisualizationPrepDeps,
 ): Promise<VisualizationPrepResult> {
-  const { s3Client } = deps ?? createDefaultDeps();
+  const { s3Client } = deps && 's3Client' in deps ? deps : createDefaultDeps();
 
   // Validate input
   if (!input || typeof input !== 'object') {

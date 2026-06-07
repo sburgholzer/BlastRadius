@@ -7,28 +7,26 @@ import { Construct } from 'constructs';
  * Properties for the BlastRadiusApiGateway construct.
  */
 export interface BlastRadiusApiGatewayProps {
-  /** Lambda function that handles POST /analyze requests (manifest ingestion + adapter routing) */
-  analyzeFunction: lambda.IFunction;
-  /** Lambda function that handles GET /analyze/{analysisId} status and results */
-  statusFunction: lambda.IFunction;
-  /** Lambda function that handles GET /analyze/{analysisId}/export */
-  exportFunction: lambda.IFunction;
-  /** Lambda function that handles GET /formats (list supported adapter formats) */
-  formatsFunction: lambda.IFunction;
+  /** Single Lambda function that handles all API routes (router pattern) */
+  apiFunction: lambda.IFunction;
+  /** Enable IAM (SigV4) authentication. Set to false for demos. Default: true */
+  enableAuth?: boolean;
 }
 
 /**
  * BlastRadiusApiGateway construct defines the API Gateway REST API
  * for the Blast Radius Pre-Deploy Visualizer.
  *
+ * All routes are handled by a single Lambda function using the router pattern.
+ *
  * Endpoints:
  * - POST /analyze - Submit a manifest or native changeset for analysis
  * - GET /analyze/{analysisId} - Get analysis status and results
  * - GET /analyze/{analysisId}/export - Export results as JSON or PDF
  * - GET /formats - List supported adapter formats
+ * - GET /analyses - List all analyses
  *
  * Authentication: IAM (SigV4) on all endpoints.
- * Timeout: 180 seconds with partial results on timeout.
  *
  * Validates: Requirements 7.1, 7.8, 9.1
  */
@@ -39,13 +37,21 @@ export class BlastRadiusApiGateway extends Construct {
   constructor(scope: Construct, id: string, props: BlastRadiusApiGatewayProps) {
     super(scope, id);
 
-    // Create the REST API with IAM authorization as default
+    const enableAuth = props.enableAuth ?? true;
+    const authType = enableAuth ? apigateway.AuthorizationType.IAM : apigateway.AuthorizationType.NONE;
+
+    // Create the REST API
     this.api = new apigateway.RestApi(this, 'BlastRadiusApi', {
       restApiName: 'BlastRadiusVisualizerApi',
       description: 'Blast Radius Pre-Deploy Visualizer REST API',
-      defaultMethodOptions: {
-        authorizationType: apigateway.AuthorizationType.IAM,
-      },
+      ...(enableAuth
+        ? { defaultMethodOptions: { authorizationType: apigateway.AuthorizationType.IAM } }
+        : { defaultCorsPreflightOptions: {
+            allowOrigins: apigateway.Cors.ALL_ORIGINS,
+            allowMethods: apigateway.Cors.ALL_METHODS,
+            allowHeaders: ['Content-Type', 'Authorization'],
+          }}
+      ),
       deployOptions: {
         stageName: 'v1',
         throttlingRateLimit: 100,
@@ -53,24 +59,8 @@ export class BlastRadiusApiGateway extends Construct {
       },
     });
 
-    // --- Lambda integrations with 180-second timeout ---
-
-    const analyzeIntegration = new apigateway.LambdaIntegration(props.analyzeFunction, {
-      timeout: cdk.Duration.seconds(29),
-      proxy: true,
-    });
-
-    const statusIntegration = new apigateway.LambdaIntegration(props.statusFunction, {
-      timeout: cdk.Duration.seconds(29),
-      proxy: true,
-    });
-
-    const exportIntegration = new apigateway.LambdaIntegration(props.exportFunction, {
-      timeout: cdk.Duration.seconds(29),
-      proxy: true,
-    });
-
-    const formatsIntegration = new apigateway.LambdaIntegration(props.formatsFunction, {
+    // Single Lambda integration for all routes
+    const apiIntegration = new apigateway.LambdaIntegration(props.apiFunction, {
       timeout: cdk.Duration.seconds(29),
       proxy: true,
     });
@@ -79,30 +69,37 @@ export class BlastRadiusApiGateway extends Construct {
 
     // POST /analyze
     const analyzeResource = this.api.root.addResource('analyze');
-    analyzeResource.addMethod('POST', analyzeIntegration, {
-      authorizationType: apigateway.AuthorizationType.IAM,
+    analyzeResource.addMethod('POST', apiIntegration, {
+      authorizationType: authType,
       operationName: 'SubmitAnalysis',
     });
 
     // GET /analyze/{analysisId}
     const analysisIdResource = analyzeResource.addResource('{analysisId}');
-    analysisIdResource.addMethod('GET', statusIntegration, {
-      authorizationType: apigateway.AuthorizationType.IAM,
+    analysisIdResource.addMethod('GET', apiIntegration, {
+      authorizationType: authType,
       operationName: 'GetAnalysisStatus',
     });
 
     // GET /analyze/{analysisId}/export
     const exportResource = analysisIdResource.addResource('export');
-    exportResource.addMethod('GET', exportIntegration, {
-      authorizationType: apigateway.AuthorizationType.IAM,
+    exportResource.addMethod('GET', apiIntegration, {
+      authorizationType: authType,
       operationName: 'ExportAnalysisResults',
     });
 
     // GET /formats
     const formatsResource = this.api.root.addResource('formats');
-    formatsResource.addMethod('GET', formatsIntegration, {
-      authorizationType: apigateway.AuthorizationType.IAM,
+    formatsResource.addMethod('GET', apiIntegration, {
+      authorizationType: authType,
       operationName: 'ListSupportedFormats',
+    });
+
+    // GET /analyses
+    const analysesResource = this.api.root.addResource('analyses');
+    analysesResource.addMethod('GET', apiIntegration, {
+      authorizationType: authType,
+      operationName: 'ListAnalyses',
     });
 
     // --- Outputs ---

@@ -307,10 +307,10 @@ describe('Feature: blast-radius-visualizer, Property 4: Adapter Conversion Produ
    * the adapter produces a valid ResourceChangeManifest that passes schema validation.
    */
   describe('CloudFormation Adapter', () => {
-    it('should produce a valid manifest for any valid CloudFormation changeset', () => {
-      fc.assert(
-        fc.property(arbitraryCfnChangeset(), (changeset) => {
-          const result = cfnHandler(changeset);
+    it('should produce a valid manifest for any valid CloudFormation changeset', async () => {
+      await fc.assert(
+        fc.asyncProperty(arbitraryCfnChangeset(), async (changeset) => {
+          const result = await cfnHandler(changeset);
 
           // Output has `manifest` property (not `error`)
           expect(result).toHaveProperty('manifest');
@@ -343,10 +343,10 @@ describe('Feature: blast-radius-visualizer, Property 4: Adapter Conversion Produ
       );
     });
 
-    it('should correctly map CloudFormation actions to modification types', () => {
-      fc.assert(
-        fc.property(arbitraryCfnChangeset(), (changeset) => {
-          const result = cfnHandler(changeset);
+    it('should correctly map CloudFormation actions to modification types', async () => {
+      await fc.assert(
+        fc.asyncProperty(arbitraryCfnChangeset(), async (changeset) => {
+          const result = await cfnHandler(changeset);
           expect(result).toHaveProperty('manifest');
 
           const output = result as { manifest: { resources: Array<{ modificationType: string }> } };
@@ -385,10 +385,10 @@ describe('Feature: blast-radius-visualizer, Property 4: Adapter Conversion Produ
    * the adapter produces a valid ResourceChangeManifest that passes schema validation.
    */
   describe('Terraform Adapter', () => {
-    it('should produce a valid manifest for any valid Terraform plan', () => {
-      fc.assert(
-        fc.property(arbitraryTerraformPlan(), (plan) => {
-          const result = terraformHandler(plan);
+    it('should produce a valid manifest for any valid Terraform plan', async () => {
+      await fc.assert(
+        fc.asyncProperty(arbitraryTerraformPlan(), async (plan) => {
+          const result = await terraformHandler(plan);
 
           // Output has `manifest` property (not `error`)
           expect(result).toHaveProperty('manifest');
@@ -422,10 +422,10 @@ describe('Feature: blast-radius-visualizer, Property 4: Adapter Conversion Produ
       );
     });
 
-    it('should correctly map Terraform actions to modification types', () => {
-      fc.assert(
-        fc.property(arbitraryTerraformPlan(), (plan) => {
-          const result = terraformHandler(plan);
+    it('should correctly map Terraform actions to modification types', async () => {
+      await fc.assert(
+        fc.asyncProperty(arbitraryTerraformPlan(), async (plan) => {
+          const result = await terraformHandler(plan);
           expect(result).toHaveProperty('manifest');
 
           const output = result as { manifest: { resources: Array<{ modificationType: string; resourceId: string }> } };
@@ -474,10 +474,10 @@ describe('Feature: blast-radius-visualizer, Property 4: Adapter Conversion Produ
    * the adapter produces a valid ResourceChangeManifest that passes schema validation.
    */
   describe('CDK Adapter', () => {
-    it('should produce a valid manifest for any valid CDK cloud assembly diff', () => {
-      fc.assert(
-        fc.property(arbitraryCdkDiff(), (diff) => {
-          const result = cdkHandler(diff);
+    it('should produce a valid manifest for any valid CDK cloud assembly diff', async () => {
+      await fc.assert(
+        fc.asyncProperty(arbitraryCdkDiff(), async (diff) => {
+          const result = await cdkHandler(diff);
 
           // Output has `manifest` property (not `error`)
           expect(result).toHaveProperty('manifest');
@@ -511,10 +511,10 @@ describe('Feature: blast-radius-visualizer, Property 4: Adapter Conversion Produ
       );
     });
 
-    it('should correctly map CDK changeTypes to modification types', () => {
-      fc.assert(
-        fc.property(arbitraryCdkDiff(), (diff) => {
-          const result = cdkHandler(diff);
+    it('should correctly map CDK changeTypes to modification types', async () => {
+      await fc.assert(
+        fc.asyncProperty(arbitraryCdkDiff(), async (diff) => {
+          const result = await cdkHandler(diff);
           expect(result).toHaveProperty('manifest');
 
           const output = result as { manifest: { resources: Array<{ modificationType: string; resourceType: string }> } };

@@ -65,7 +65,7 @@ export interface StatusHandlerDeps {
 }
 
 /** Environment variable for the DynamoDB status table name. */
-const TABLE_NAME = process.env.STATUS_TABLE ?? 'AnalysisStatus';
+const TABLE_NAME = process.env.ANALYSIS_STATUS_TABLE ?? process.env.STATUS_TABLE ?? 'AnalysisStatus';
 
 function createDefaultDeps(): StatusHandlerDeps {
   const client = new DynamoDBClient({});
@@ -90,35 +90,46 @@ async function handleUpdate(
 ): Promise<UpdateStatusOutput | StatusError> {
   const now = new Date().toISOString();
 
-  // Use UpdateCommand with conditional expressions to handle both create and update
-  // If the item doesn't exist yet, SET startedAt; otherwise just update fields.
+  // Build update expression dynamically based on provided fields
+  const updateParts = [
+    '#status = :status',
+    'currentStage = :currentStage',
+    'progressPercentage = :progressPercentage',
+    'updatedAt = :updatedAt',
+  ];
+  const exprValues: Record<string, unknown> = {
+    ':status': input.status,
+    ':currentStage': input.currentStage,
+    ':progressPercentage': input.progressPercentage,
+    ':updatedAt': now,
+  };
+
+  if (input.requestingPrincipal) {
+    updateParts.push('requestingPrincipal = :requestingPrincipal');
+    exprValues[':requestingPrincipal'] = input.requestingPrincipal;
+  }
+  if (input.originatingAccountId) {
+    updateParts.push('originatingAccountId = :originatingAccountId');
+    exprValues[':originatingAccountId'] = input.originatingAccountId;
+  }
+  if (input.resultLocation) {
+    updateParts.push('resultLocation = :resultLocation');
+    exprValues[':resultLocation'] = input.resultLocation;
+  }
+  if (input.status === 'running') {
+    updateParts.push('startedAt = if_not_exists(startedAt, :updatedAt)');
+  }
+
   try {
     await docClient.send(
       new UpdateCommand({
         TableName: TABLE_NAME,
         Key: { analysisId: input.analysisId },
-        UpdateExpression: `
-          SET #status = :status,
-              currentStage = :currentStage,
-              progressPercentage = :progressPercentage,
-              updatedAt = :updatedAt,
-              requestingPrincipal = :requestingPrincipal,
-              originatingAccountId = :originatingAccountId
-              ${input.resultLocation ? ', resultLocation = :resultLocation' : ''}
-              ${input.status === 'running' ? ', startedAt = if_not_exists(startedAt, :updatedAt)' : ''}
-        `.trim(),
+        UpdateExpression: `SET ${updateParts.join(', ')}`,
         ExpressionAttributeNames: {
           '#status': 'status',
         },
-        ExpressionAttributeValues: {
-          ':status': input.status,
-          ':currentStage': input.currentStage,
-          ':progressPercentage': input.progressPercentage,
-          ':updatedAt': now,
-          ':requestingPrincipal': input.requestingPrincipal,
-          ':originatingAccountId': input.originatingAccountId,
-          ...(input.resultLocation ? { ':resultLocation': input.resultLocation } : {}),
-        },
+        ExpressionAttributeValues: exprValues,
       }),
     );
 
@@ -203,7 +214,7 @@ function computeElapsedTimeMs(startedAt: string | undefined): number {
  * Routes to the appropriate operation based on the `operation` field in the input.
  */
 export async function handler(event: StatusInput, deps?: StatusHandlerDeps): Promise<StatusResult> {
-  const { docClient } = deps ?? createDefaultDeps();
+  const { docClient } = deps && 'docClient' in deps ? deps : createDefaultDeps();
 
   if (!event || typeof event !== 'object') {
     return { error: 'Invalid input: expected an object with an "operation" field', statusCode: 400 };
@@ -223,12 +234,6 @@ export async function handler(event: StatusInput, deps?: StatusHandlerDeps): Pro
 
   // Validate update-specific fields
   const updateInput = event as UpdateStatusInput;
-  if (!updateInput.requestingPrincipal || typeof updateInput.requestingPrincipal !== 'string') {
-    return { error: 'Missing or invalid "requestingPrincipal" field', statusCode: 400 };
-  }
-  if (!updateInput.originatingAccountId || typeof updateInput.originatingAccountId !== 'string') {
-    return { error: 'Missing or invalid "originatingAccountId" field', statusCode: 400 };
-  }
   if (!updateInput.currentStage || typeof updateInput.currentStage !== 'string') {
     return { error: 'Missing or invalid "currentStage" field', statusCode: 400 };
   }

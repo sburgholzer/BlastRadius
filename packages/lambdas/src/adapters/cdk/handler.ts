@@ -344,7 +344,7 @@ function flattenNestedStacks(
  * 4. Maps to canonical format.
  * 5. Returns error with location if input is malformed.
  */
-export function handler(event: unknown): CdkAdapterResult {
+export async function handler(event: unknown): Promise<CdkAdapterResult> {
   // Validate top-level structure
   const structureError = validateDiffStructure(event);
   if (structureError) {

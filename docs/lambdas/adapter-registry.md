@@ -16,11 +16,11 @@
 
 | formatId | adapterLambdaArn | displayName |
 |----------|-----------------|-------------|
-| `cloudformation` | `arn:aws:lambda:...:cfn-adapter` | CloudFormation Adapter |
-| `terraform-plan` | `arn:aws:lambda:...:terraform-adapter` | Terraform Adapter |
-| `cdk` | `arn:aws:lambda:...:cdk-adapter` | CDK Adapter |
+| `cloudformation` | `arn:aws:lambda:...:BlastRadius-Adapter-CloudFormation` | CloudFormation Adapter |
+| `terraform-plan` | `arn:aws:lambda:...:BlastRadius-Adapter-Terraform` | Terraform Adapter |
+| `cdk` | `arn:aws:lambda:...:BlastRadius-Adapter-CDK` | CDK Adapter |
 
-**Why DynamoDB instead of hardcoding?** Adding a new adapter (say Pulumi) means inserting one row in DynamoDB and deploying one new Lambda. Zero changes to the registry code or any existing adapter.
+**Seeded automatically:** The CDK stack uses `AwsCustomResource` to populate these entries on every deploy. Adding a new adapter means creating the Lambda and adding a seed entry to the stack — zero changes to the registry code.
 
 **Unknown format handling:**
 ```
@@ -35,4 +35,10 @@ export async function handler(event: AdapterRegistryInput, deps?: AdapterRegistr
 ```
 In production, creates real DynamoDB/Lambda clients. In tests, you pass mocks — no AWS calls needed.
 
+**Important:** The handler uses `deps && 'dynamoClient' in deps` to distinguish between test-injected deps and the Lambda runtime's `Context` object (which is passed as the second argument in production). Using `deps ?? createDefaultDeps()` would fail because the Context object is truthy.
+
+**Adapter handlers are async:** All adapter Lambdas (cloudformation, terraform, cdk) must be declared `async`. The Node.js 22 Lambda runtime returns `null` for synchronous handlers — this is a runtime behavior change from Node.js 18/20.
+
 **Output includes metadata** — adapter name, how long conversion took, and any non-fatal warnings.
+
+**Pipeline position:** The adapter registry is invoked by the Step Functions `AdapterConversion` state, which passes `{ format: $.sourceFormat, payload: $.manifest }` using a custom payload mapping. The result is stored at `$.adapterResult` using `resultPath`.

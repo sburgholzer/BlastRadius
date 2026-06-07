@@ -139,7 +139,7 @@ export async function handler(
   event: AdapterRegistryInput,
   deps?: AdapterRegistryDeps,
 ): Promise<AdapterRegistryResult> {
-  const { dynamoClient, lambdaClient } = deps ?? createDefaultDeps();
+  const { dynamoClient, lambdaClient } = deps && 'dynamoClient' in deps ? deps : createDefaultDeps();
 
   // Validate input
   if (!event.format || typeof event.format !== 'string') {

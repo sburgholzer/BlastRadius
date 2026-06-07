@@ -14,6 +14,7 @@ import {
   BedrockRuntimeClient,
   InvokeModelCommand,
 } from '@aws-sdk/client-bedrock-runtime';
+import { S3Client, GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
 import type {
   ScoredResource,
   RiskSummary,
@@ -21,11 +22,13 @@ import type {
 } from '@blast-radius/core';
 
 export interface SummaryInput {
+  analysisId?: string;
   scoredResources: ScoredResource[];
   riskSummary: RiskSummary;
   dependencyGraph: DependencyGraph;
   /** Feature flag: when false, summary generation is skipped. */
   enableSummary?: boolean;
+  manifest?: unknown;
 }
 
 export interface SummaryOutput {
@@ -231,6 +234,29 @@ export async function handler(input: SummaryInput): Promise<SummaryOutput> {
       };
     }
 
+    // Store summary in S3 alongside the visualization result
+    if (input.analysisId) {
+      try {
+        const s3Client = new S3Client({});
+        const bucket = process.env.RESULTS_BUCKET ?? 'blast-radius-results';
+        const vizKey = `analyses/${input.analysisId}/visualization.json`;
+
+        // Read existing visualization result and add the summary
+        const existing = await s3Client.send(new GetObjectCommand({ Bucket: bucket, Key: vizKey }));
+        const vizData = JSON.parse(await existing.Body?.transformToString() ?? '{}');
+        vizData.naturalLanguageSummary = summary;
+
+        await s3Client.send(new PutObjectCommand({
+          Bucket: bucket,
+          Key: vizKey,
+          Body: JSON.stringify(vizData),
+          ContentType: 'application/json',
+        }));
+      } catch {
+        // Best effort — don't fail the pipeline if S3 write fails
+      }
+    }
+
     return {
       summary,
       generationDurationMs: Date.now() - startTime,
@@ -255,6 +281,6 @@ export async function handler(input: SummaryInput): Promise<SummaryOutput> {
  * Defaults to false (disabled) if not set.
  */
 function isFeatureEnabled(): boolean {
-  const flag = process.env.ENABLE_BEDROCK_SUMMARY;
+  const flag = process.env.ENABLE_BEDROCK_SUMMARY ?? process.env.ENABLE_BEDROCK;
   return flag === 'true' || flag === '1';
 }

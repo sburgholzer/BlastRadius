@@ -191,7 +191,7 @@ function convertResourceChange(rc: CloudFormationResourceChange): ResourceChange
  * 3. Maps to canonical format.
  * 4. Returns error with location if input is malformed.
  */
-export function handler(event: unknown): CloudFormationAdapterResult {
+export async function handler(event: unknown): Promise<CloudFormationAdapterResult> {
   // Validate top-level structure
   const structureError = validateChangesetStructure(event);
   if (structureError) {

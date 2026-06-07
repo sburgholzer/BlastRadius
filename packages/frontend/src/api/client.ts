@@ -7,7 +7,37 @@ import type {
   SupportedFormat,
 } from './types';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
+let _apiBaseUrlPromise: Promise<string> | undefined;
+
+function getApiBaseUrl(): Promise<string> {
+  if (!_apiBaseUrlPromise) {
+    _apiBaseUrlPromise = resolveApiBaseUrl();
+  }
+  return _apiBaseUrlPromise;
+}
+
+async function resolveApiBaseUrl(): Promise<string> {
+  // 1. Vite env var (local dev / build-time override)
+  if (import.meta.env.VITE_API_BASE_URL) {
+    return import.meta.env.VITE_API_BASE_URL as string;
+  }
+
+  // 2. Runtime config (deployed via CDK — /config.json in S3)
+  try {
+    const response = await fetch('/config.json');
+    if (response.ok) {
+      const config = await response.json();
+      if (config.apiBaseUrl) {
+        return config.apiBaseUrl as string;
+      }
+    }
+  } catch {
+    // Config not available — fall back to default
+  }
+
+  // 3. Fallback — same-origin /api path
+  return '/api';
+}
 
 class ApiClientError extends Error {
   public readonly statusCode: number;
@@ -49,7 +79,8 @@ export const apiClient = {
   async submitAnalysis(
     request: SubmitAnalysisRequest,
   ): Promise<SubmitAnalysisResponse> {
-    const response = await fetch(`${API_BASE_URL}/analyze`, {
+    const baseUrl = await getApiBaseUrl();
+    const response = await fetch(`${baseUrl}/analyze`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(request),
@@ -61,7 +92,8 @@ export const apiClient = {
    * Get analysis status and results by ID.
    */
   async getAnalysis(analysisId: string): Promise<AnalysisResult> {
-    const response = await fetch(`${API_BASE_URL}/analyze/${analysisId}`);
+    const baseUrl = await getApiBaseUrl();
+    const response = await fetch(`${baseUrl}/analyze/${analysisId}`);
     return handleResponse<AnalysisResult>(response);
   },
 
@@ -69,7 +101,8 @@ export const apiClient = {
    * List all analyses (status records).
    */
   async listAnalyses(): Promise<AnalysisStatus[]> {
-    const response = await fetch(`${API_BASE_URL}/analyses`);
+    const baseUrl = await getApiBaseUrl();
+    const response = await fetch(`${baseUrl}/analyses`);
     return handleResponse<AnalysisStatus[]>(response);
   },
 
@@ -80,8 +113,9 @@ export const apiClient = {
     analysisId: string,
     format: 'json' | 'pdf',
   ): Promise<Blob> {
+    const baseUrl = await getApiBaseUrl();
     const response = await fetch(
-      `${API_BASE_URL}/analyze/${analysisId}/export?format=${format}`,
+      `${baseUrl}/analyze/${analysisId}/export?format=${format}`,
     );
     if (!response.ok) {
       let apiError: ApiError | undefined;
@@ -103,7 +137,8 @@ export const apiClient = {
    * Get list of supported changeset formats.
    */
   async getFormats(): Promise<SupportedFormat[]> {
-    const response = await fetch(`${API_BASE_URL}/formats`);
+    const baseUrl = await getApiBaseUrl();
+    const response = await fetch(`${baseUrl}/formats`);
     return handleResponse<SupportedFormat[]>(response);
   },
 

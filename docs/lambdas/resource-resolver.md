@@ -1,52 +1,87 @@
 ← Back to [Architecture Walkthrough](../architecture-walkthrough.md)
 
-# Resource Resolver Handler
+# Resource Resolver
 
-**`resource-resolver/handler.ts`** — The heart of the system. This Lambda takes the validated manifest and builds the dependency graph by querying AWS.
+**`resource-resolver/handler.ts`** — The most complex Lambda. Discovers downstream dependencies for each changed resource by querying AWS Config and Resource Explorer.
 
-**In plain English:** "You're changing security group sg-abc123. Let me ask AWS what depends on that. Oh, two EC2 instances use it. Now let me ask what depends on *those*. Oh, an RDS database references one of them. And so on, until we've mapped the full blast radius."
+**What it does:**
+1. For each resource in the changeset, queries AWS Config for relationships
+2. Recursively traverses discovered relationships up to `maxDepth` (default: 5)
+3. Builds a dependency graph (nodes + edges)
+4. Detects circular references via visited-set
+5. Classifies coverage: full, partial, or unknown
+6. Uses an LRU cache to avoid redundant queries
 
-**The algorithm — recursive graph traversal with safeguards:**
-
-```
-For each resource in the manifest:
-  1. Already visited this resource? → skip (circular reference)
-  2. Deeper than maxDepth? → stop here
-  3. In an authorized account/region? → if not, skip
-  4. Check the cache — already looked this up?
-     - Yes → use cached result (cache hit)
-     - No → query AWS Config + Resource Explorer (cache miss), store result
-  5. For each discovered dependency:
-     - Add it as a node + edge in the graph
-     - Recurse into that dependency (go to step 1)
-```
-
-**Three safeguards:**
-
-1. **Circular reference detection (visited-set):** Resources can reference each other (A → B → C → A). A `Set` tracks every resource we've processed — if we encounter it again, we skip it. Prevents infinite loops.
-
-2. **Depth limit (default 5):** Without a limit, we'd traverse the entire AWS account. Configurable per analysis.
-
-3. **Authorization scoping:** Only queries resources in accounts/regions the user is allowed to see.
-
-**Two data sources:**
-
-| Source | What it knows | Example |
-|--------|--------------|---------|
-| AWS Config | Relationships *within* an account | security group → EC2, subnet → VPC |
-| Resource Explorer | Resources *across* accounts and regions | cross-account references |
-
-Both are queried for each resource. Results are combined.
-
-**The LRU cache in action:** If resource A and resource B both depend on resource C, we only query AWS for C once. The second time is a cache hit. For large graphs, this saves hundreds of API calls.
-
-**What it returns:**
+**Flexible input:** Handles both the original input shape and the pipeline state shape:
 ```typescript
-{
-  dependencyGraph: { nodes: [...], edges: [...] },
-  coverage: { fullCoverage: 45, partialCoverage: 3, unknownCoverage: 1 },
-  cacheStats: { hits: 847, misses: 203 }
+const resources = event.resources ?? event.validatedManifest?.resources ?? [];
+const maxDepth = event.maxDepth ?? event.options?.maxDepth ?? DEFAULT_MAX_DEPTH;
+```
+
+**AWS Config query:**
+```sql
+SELECT relationships.resourceId, relationships.resourceType, relationships.name, awsRegion, accountId
+WHERE resourceId = '<resourceId>'
+```
+
+Uses `SelectAggregateResourceConfigCommand` with the aggregator specified by `CONFIG_AGGREGATOR_NAME` env var. Relationships with missing `resourceId` are filtered out at the source (Config sometimes returns incomplete relationship entries).
+
+**Dependencies:**
+```typescript
+interface ResolverDeps {
+  configClient: ConfigServiceClient;
+  resourceExplorerClient: ResourceExplorer2Client;
+  configAggregatorName: string;
 }
 ```
 
-**Why it's the most expensive handler:** Makes real AWS API calls — potentially hundreds for a large manifest. Gets 1024MB memory and 90-second timeout (vs 256MB/30s for most others). The cache and depth limit keep it bounded.
+Uses the standard deps pattern with `deps && 'configClient' in deps ? deps : createDefaultDeps()`. In production, creates its own SDK clients. The `configAggregatorName` comes from `process.env.CONFIG_AGGREGATOR_NAME`.
+
+**Output (stored at `$.discoveryResult` in pipeline):**
+```typescript
+interface ResolverOutput {
+  dependencyGraph: { nodes: DependencyNode[]; edges: DependencyEdge[] };
+  coverage: { fullCoverage: number; partialCoverage: number; unknownCoverage: number };
+  cacheStats: { hits: number; misses: number };
+}
+```
+
+**Node structure:**
+```typescript
+interface DependencyNode {
+  resourceId: string;
+  resourceType: string;
+  provider: string;
+  region: string;
+  accountId: string;
+  isDirectChange: boolean;
+  dependencyCoverage: 'full' | 'partial' | 'unknown';
+}
+```
+
+**Edge structure:**
+```typescript
+interface DependencyEdge {
+  sourceId: string;
+  targetId: string;
+  relationshipType: string;  // e.g., "Is associated with NetworkInterface"
+  depth: number;
+}
+```
+
+**Coverage classification:**
+- **Full** — Config returned relationship data for this resource
+- **Partial** — Resource Explorer found the resource but Config had limited data
+- **Unknown** — Resource couldn't be found in either service
+
+**Performance characteristics:**
+- Memory: 1024 MB (Config queries can return large result sets)
+- Timeout: 90 seconds
+- LRU cache: 10,000 entries (prevents re-querying the same resource in a deep graph)
+- Retry: 3 attempts with exponential backoff for retryable errors
+
+**IAM permissions:**
+- `config:SelectAggregateResourceConfig`, `config:SelectResourceConfig`, `config:GetResourceConfigHistory`, `config:ListDiscoveredResources`
+- `resource-explorer-2:Search`
+
+**Pipeline position:** After Ingestion, before Scoring. The pipeline passes the entire state to Discovery (it reads `validatedManifest.resources` from the state).

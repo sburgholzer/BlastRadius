@@ -11,15 +11,20 @@ import { validateManifest, flattenHierarchy } from '@blast-radius/core';
 import type { ResourceChangeManifest } from '@blast-radius/core';
 
 export interface IngestionInput {
+  analysisId?: string;
   manifest: unknown;
   requestingPrincipal: string;
   sourceFormat: string;
+  options?: Record<string, unknown>;
+  originatingAccountId?: string;
 }
 
 export interface IngestionOutput {
   analysisId: string;
+  sourceFormat: string;
   validatedManifest: ResourceChangeManifest;
   resourceCount: number;
+  options?: Record<string, unknown>;
 }
 
 export interface ErrorResponse {
@@ -77,11 +82,13 @@ export async function handler(event: IngestionInput): Promise<IngestionOutput | 
   };
 
   // Step 4: Generate analysis ID and return output
-  const analysisId = randomUUID();
+  const analysisId = event.analysisId ?? randomUUID();
 
   return {
     analysisId,
+    sourceFormat: event.sourceFormat,
     validatedManifest: flattenedManifest,
     resourceCount: flattenResult.resources.length,
+    ...(event.options && { options: event.options }),
   };
 }

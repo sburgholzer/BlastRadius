@@ -4,3 +4,13 @@ coverage
 *.tsbuildinfo
 .env
 .env.local
+
+# CDK
+cdk.out
+cdk.context.json
+
+# Example build artifacts
+examples/**/lib/*.js
+examples/**/lib/*.js.map
+examples/**/lib/*.d.ts
+examples/**/lib/*.d.ts.map

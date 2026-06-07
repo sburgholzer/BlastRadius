@@ -3,10 +3,15 @@ import { Link } from 'react-router-dom';
 import { apiClient } from '../api/client';
 import type { AnalysisStatus } from '../api/types';
 
+type SortField = 'startedAt' | 'status' | 'currentStage' | 'progressPercentage';
+type SortDirection = 'asc' | 'desc';
+
 export function AnalysisListPage() {
   const [analyses, setAnalyses] = useState<AnalysisStatus[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [sortField, setSortField] = useState<SortField>('startedAt');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
 
   useEffect(() => {
     apiClient
@@ -15,6 +20,39 @@ export function AnalysisListPage() {
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
   }, []);
+
+  function handleSort(field: SortField) {
+    if (sortField === field) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortDirection(field === 'startedAt' ? 'desc' : 'asc');
+    }
+  }
+
+  function sortIndicator(field: SortField): string {
+    if (sortField !== field) return '';
+    return sortDirection === 'asc' ? ' ▲' : ' ▼';
+  }
+
+  const sorted = [...analyses].sort((a, b) => {
+    let cmp = 0;
+    switch (sortField) {
+      case 'startedAt':
+        cmp = new Date(a.startedAt).getTime() - new Date(b.startedAt).getTime();
+        break;
+      case 'status':
+        cmp = a.status.localeCompare(b.status);
+        break;
+      case 'currentStage':
+        cmp = (a.currentStage || '').localeCompare(b.currentStage || '');
+        break;
+      case 'progressPercentage':
+        cmp = a.progressPercentage - b.progressPercentage;
+        break;
+    }
+    return sortDirection === 'asc' ? cmp : -cmp;
+  });
 
   if (loading) return <div className="loading">Loading analyses...</div>;
   if (error) return <div className="error">Error: {error}</div>;
@@ -31,14 +69,22 @@ export function AnalysisListPage() {
           <thead>
             <tr>
               <th>Analysis ID</th>
-              <th>Status</th>
-              <th>Stage</th>
-              <th>Progress</th>
-              <th>Started</th>
+              <th className="sortable" onClick={() => handleSort('status')}>
+                Status{sortIndicator('status')}
+              </th>
+              <th className="sortable" onClick={() => handleSort('currentStage')}>
+                Stage{sortIndicator('currentStage')}
+              </th>
+              <th className="sortable" onClick={() => handleSort('progressPercentage')}>
+                Progress{sortIndicator('progressPercentage')}
+              </th>
+              <th className="sortable" onClick={() => handleSort('startedAt')}>
+                Started{sortIndicator('startedAt')}
+              </th>
             </tr>
           </thead>
           <tbody>
-            {analyses.map((analysis) => (
+            {sorted.map((analysis) => (
               <tr key={analysis.analysisId}>
                 <td>
                   <Link to={`/analyses/${analysis.analysisId}`}>

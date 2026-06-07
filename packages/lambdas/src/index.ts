@@ -84,3 +84,5 @@ export type {
   ResultsResult,
   ResultsHandlerDeps,
 } from './results/index';
+
+export { handler as apiHandler } from './api/index';

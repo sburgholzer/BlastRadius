@@ -11,4 +11,5 @@ new BlastRadiusStack(app, 'BlastRadiusStack', {
   },
   enableBedrockSummary: true,
   resultsRetentionDays: 90,
+  enableAuth: false, // Set to true for production
 });

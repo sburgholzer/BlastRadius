@@ -1,0 +1,1472 @@
+{
+  "Resources": {
+    "ProductionVpc25472B74": {
+      "Type": "AWS::EC2::VPC",
+      "Properties": {
+        "CidrBlock": "10.0.0.0/16",
+        "EnableDnsHostnames": true,
+        "EnableDnsSupport": true,
+        "InstanceTenancy": "default",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "BlastRadiusDemoBaseline/ProductionVpc"
+          }
+        ]
+      },
+      "Metadata": {
+        "aws:cdk:path": "BlastRadiusDemoBaseline/ProductionVpc/Resource"
+      }
+    },
+    "ProductionVpcPublicSubnet1SubnetD1B80133": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "AvailabilityZone": "us-east-1a",
+        "CidrBlock": "10.0.0.0/24",
+        "MapPublicIpOnLaunch": true,
+        "Tags": [
+          {
+            "Key": "aws-cdk:subnet-name",
+            "Value": "Public"
+          },
+          {
+            "Key": "aws-cdk:subnet-type",
+            "Value": "Public"
+          },
+          {
+            "Key": "Name",
+            "Value": "BlastRadiusDemoBaseline/ProductionVpc/PublicSubnet1"
+          }
+        ],
+        "VpcId": {
+          "Ref": "ProductionVpc25472B74"
+        }
+      },
+      "Metadata": {
+        "aws:cdk:path": "BlastRadiusDemoBaseline/ProductionVpc/PublicSubnet1/Subnet"
+      }
+    },
+    "ProductionVpcPublicSubnet1RouteTable81C7E19A": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "BlastRadiusDemoBaseline/ProductionVpc/PublicSubnet1"
+          }
+        ],
+        "VpcId": {
+          "Ref": "ProductionVpc25472B74"
+        }
+      },
+      "Metadata": {
+        "aws:cdk:path": "BlastRadiusDemoBaseline/ProductionVpc/PublicSubnet1/RouteTable"
+      }
+    },
+    "ProductionVpcPublicSubnet1RouteTableAssociationE3A3CB62": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "ProductionVpcPublicSubnet1RouteTable81C7E19A"
+        },
+        "SubnetId": {
+          "Ref": "ProductionVpcPublicSubnet1SubnetD1B80133"
+        }
+      },
+      "Metadata": {
+        "aws:cdk:path": "BlastRadiusDemoBaseline/ProductionVpc/PublicSubnet1/RouteTableAssociation"
+      }
+    },
+    "ProductionVpcPublicSubnet1DefaultRouteB2D4E6E0": {
+      "Type": "AWS::EC2::Route",
+      "Properties": {
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "GatewayId": {
+          "Ref": "ProductionVpcIGWE32DC93C"
+        },
+        "RouteTableId": {
+          "Ref": "ProductionVpcPublicSubnet1RouteTable81C7E19A"
+        }
+      },
+      "DependsOn": [
+        "ProductionVpcVPCGW781F77FA"
+      ],
+      "Metadata": {
+        "aws:cdk:path": "BlastRadiusDemoBaseline/ProductionVpc/PublicSubnet1/DefaultRoute"
+      }
+    },
+    "ProductionVpcPublicSubnet1EIP209BC6A5": {
+      "Type": "AWS::EC2::EIP",
+      "Properties": {
+        "Domain": "vpc",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "BlastRadiusDemoBaseline/ProductionVpc/PublicSubnet1"
+          }
+        ]
+      },
+      "Metadata": {
+        "aws:cdk:path": "BlastRadiusDemoBaseline/ProductionVpc/PublicSubnet1/EIP"
+      }
+    },
+    "ProductionVpcPublicSubnet1NATGatewayF22A3A53": {
+      "Type": "AWS::EC2::NatGateway",
+      "Properties": {
+        "AllocationId": {
+          "Fn::GetAtt": [
+            "ProductionVpcPublicSubnet1EIP209BC6A5",
+            "AllocationId"
+          ]
+        },
+        "SubnetId": {
+          "Ref": "ProductionVpcPublicSubnet1SubnetD1B80133"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "BlastRadiusDemoBaseline/ProductionVpc/PublicSubnet1"
+          }
+        ]
+      },
+      "DependsOn": [
+        "ProductionVpcPublicSubnet1DefaultRouteB2D4E6E0",
+        "ProductionVpcPublicSubnet1RouteTableAssociationE3A3CB62"
+      ],
+      "Metadata": {
+        "aws:cdk:path": "BlastRadiusDemoBaseline/ProductionVpc/PublicSubnet1/NATGateway"
+      }
+    },
+    "ProductionVpcPublicSubnet2Subnet95C9DA55": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "AvailabilityZone": "us-east-1b",
+        "CidrBlock": "10.0.1.0/24",
+        "MapPublicIpOnLaunch": true,
+        "Tags": [
+          {
+            "Key": "aws-cdk:subnet-name",
+            "Value": "Public"
+          },
+          {
+            "Key": "aws-cdk:subnet-type",
+            "Value": "Public"
+          },
+          {
+            "Key": "Name",
+            "Value": "BlastRadiusDemoBaseline/ProductionVpc/PublicSubnet2"
+          }
+        ],
+        "VpcId": {
+          "Ref": "ProductionVpc25472B74"
+        }
+      },
+      "Metadata": {
+        "aws:cdk:path": "BlastRadiusDemoBaseline/ProductionVpc/PublicSubnet2/Subnet"
+      }
+    },
+    "ProductionVpcPublicSubnet2RouteTableC728B98C": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "BlastRadiusDemoBaseline/ProductionVpc/PublicSubnet2"
+          }
+        ],
+        "VpcId": {
+          "Ref": "ProductionVpc25472B74"
+        }
+      },
+      "Metadata": {
+        "aws:cdk:path": "BlastRadiusDemoBaseline/ProductionVpc/PublicSubnet2/RouteTable"
+      }
+    },
+    "ProductionVpcPublicSubnet2RouteTableAssociationA4E94588": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "ProductionVpcPublicSubnet2RouteTableC728B98C"
+        },
+        "SubnetId": {
+          "Ref": "ProductionVpcPublicSubnet2Subnet95C9DA55"
+        }
+      },
+      "Metadata": {
+        "aws:cdk:path": "BlastRadiusDemoBaseline/ProductionVpc/PublicSubnet2/RouteTableAssociation"
+      }
+    },
+    "ProductionVpcPublicSubnet2DefaultRoute352EA01E": {
+      "Type": "AWS::EC2::Route",
+      "Properties": {
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "GatewayId": {
+          "Ref": "ProductionVpcIGWE32DC93C"
+        },
+        "RouteTableId": {
+          "Ref": "ProductionVpcPublicSubnet2RouteTableC728B98C"
+        }
+      },
+      "DependsOn": [
+        "ProductionVpcVPCGW781F77FA"
+      ],
+      "Metadata": {
+        "aws:cdk:path": "BlastRadiusDemoBaseline/ProductionVpc/PublicSubnet2/DefaultRoute"
+      }
+    },
+    "ProductionVpcPublicSubnet2EIP2676175B": {
+      "Type": "AWS::EC2::EIP",
+      "Properties": {
+        "Domain": "vpc",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "BlastRadiusDemoBaseline/ProductionVpc/PublicSubnet2"
+          }
+        ]
+      },
+      "Metadata": {
+        "aws:cdk:path": "BlastRadiusDemoBaseline/ProductionVpc/PublicSubnet2/EIP"
+      }
+    },
+    "ProductionVpcPublicSubnet2NATGatewayAC21CB6D": {
+      "Type": "AWS::EC2::NatGateway",
+      "Properties": {
+        "AllocationId": {
+          "Fn::GetAtt": [
+            "ProductionVpcPublicSubnet2EIP2676175B",
+            "AllocationId"
+          ]
+        },
+        "SubnetId": {
+          "Ref": "ProductionVpcPublicSubnet2Subnet95C9DA55"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "BlastRadiusDemoBaseline/ProductionVpc/PublicSubnet2"
+          }
+        ]
+      },
+      "DependsOn": [
+        "ProductionVpcPublicSubnet2DefaultRoute352EA01E",
+        "ProductionVpcPublicSubnet2RouteTableAssociationA4E94588"
+      ],
+      "Metadata": {
+        "aws:cdk:path": "BlastRadiusDemoBaseline/ProductionVpc/PublicSubnet2/NATGateway"
+      }
+    },
+    "ProductionVpcPrivateSubnet1SubnetCF1A85CA": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "AvailabilityZone": "us-east-1a",
+        "CidrBlock": "10.0.2.0/24",
+        "MapPublicIpOnLaunch": false,
+        "Tags": [
+          {
+            "Key": "aws-cdk:subnet-name",
+            "Value": "Private"
+          },
+          {
+            "Key": "aws-cdk:subnet-type",
+            "Value": "Private"
+          },
+          {
+            "Key": "Name",
+            "Value": "BlastRadiusDemoBaseline/ProductionVpc/PrivateSubnet1"
+          }
+        ],
+        "VpcId": {
+          "Ref": "ProductionVpc25472B74"
+        }
+      },
+      "Metadata": {
+        "aws:cdk:path": "BlastRadiusDemoBaseline/ProductionVpc/PrivateSubnet1/Subnet"
+      }
+    },
+    "ProductionVpcPrivateSubnet1RouteTableCDC52307": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "BlastRadiusDemoBaseline/ProductionVpc/PrivateSubnet1"
+          }
+        ],
+        "VpcId": {
+          "Ref": "ProductionVpc25472B74"
+        }
+      },
+      "Metadata": {
+        "aws:cdk:path": "BlastRadiusDemoBaseline/ProductionVpc/PrivateSubnet1/RouteTable"
+      }
+    },
+    "ProductionVpcPrivateSubnet1RouteTableAssociationCD30BC34": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "ProductionVpcPrivateSubnet1RouteTableCDC52307"
+        },
+        "SubnetId": {
+          "Ref": "ProductionVpcPrivateSubnet1SubnetCF1A85CA"
+        }
+      },
+      "Metadata": {
+        "aws:cdk:path": "BlastRadiusDemoBaseline/ProductionVpc/PrivateSubnet1/RouteTableAssociation"
+      }
+    },
+    "ProductionVpcPrivateSubnet1DefaultRoute73423744": {
+      "Type": "AWS::EC2::Route",
+      "Properties": {
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "NatGatewayId": {
+          "Ref": "ProductionVpcPublicSubnet1NATGatewayF22A3A53"
+        },
+        "RouteTableId": {
+          "Ref": "ProductionVpcPrivateSubnet1RouteTableCDC52307"
+        }
+      },
+      "Metadata": {
+        "aws:cdk:path": "BlastRadiusDemoBaseline/ProductionVpc/PrivateSubnet1/DefaultRoute"
+      }
+    },
+    "ProductionVpcPrivateSubnet2SubnetE65F16E9": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "AvailabilityZone": "us-east-1b",
+        "CidrBlock": "10.0.3.0/24",
+        "MapPublicIpOnLaunch": false,
+        "Tags": [
+          {
+            "Key": "aws-cdk:subnet-name",
+            "Value": "Private"
+          },
+          {
+            "Key": "aws-cdk:subnet-type",
+            "Value": "Private"
+          },
+          {
+            "Key": "Name",
+            "Value": "BlastRadiusDemoBaseline/ProductionVpc/PrivateSubnet2"
+          }
+        ],
+        "VpcId": {
+          "Ref": "ProductionVpc25472B74"
+        }
+      },
+      "Metadata": {
+        "aws:cdk:path": "BlastRadiusDemoBaseline/ProductionVpc/PrivateSubnet2/Subnet"
+      }
+    },
+    "ProductionVpcPrivateSubnet2RouteTable470BCB4E": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "BlastRadiusDemoBaseline/ProductionVpc/PrivateSubnet2"
+          }
+        ],
+        "VpcId": {
+          "Ref": "ProductionVpc25472B74"
+        }
+      },
+      "Metadata": {
+        "aws:cdk:path": "BlastRadiusDemoBaseline/ProductionVpc/PrivateSubnet2/RouteTable"
+      }
+    },
+    "ProductionVpcPrivateSubnet2RouteTableAssociation30B0B69B": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "ProductionVpcPrivateSubnet2RouteTable470BCB4E"
+        },
+        "SubnetId": {
+          "Ref": "ProductionVpcPrivateSubnet2SubnetE65F16E9"
+        }
+      },
+      "Metadata": {
+        "aws:cdk:path": "BlastRadiusDemoBaseline/ProductionVpc/PrivateSubnet2/RouteTableAssociation"
+      }
+    },
+    "ProductionVpcPrivateSubnet2DefaultRoute2444B7E2": {
+      "Type": "AWS::EC2::Route",
+      "Properties": {
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "NatGatewayId": {
+          "Ref": "ProductionVpcPublicSubnet2NATGatewayAC21CB6D"
+        },
+        "RouteTableId": {
+          "Ref": "ProductionVpcPrivateSubnet2RouteTable470BCB4E"
+        }
+      },
+      "Metadata": {
+        "aws:cdk:path": "BlastRadiusDemoBaseline/ProductionVpc/PrivateSubnet2/DefaultRoute"
+      }
+    },
+    "ProductionVpcIsolatedSubnet1Subnet39F9464D": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "AvailabilityZone": "us-east-1a",
+        "CidrBlock": "10.0.4.0/24",
+        "MapPublicIpOnLaunch": false,
+        "Tags": [
+          {
+            "Key": "aws-cdk:subnet-name",
+            "Value": "Isolated"
+          },
+          {
+            "Key": "aws-cdk:subnet-type",
+            "Value": "Isolated"
+          },
+          {
+            "Key": "Name",
+            "Value": "BlastRadiusDemoBaseline/ProductionVpc/IsolatedSubnet1"
+          }
+        ],
+        "VpcId": {
+          "Ref": "ProductionVpc25472B74"
+        }
+      },
+      "Metadata": {
+        "aws:cdk:path": "BlastRadiusDemoBaseline/ProductionVpc/IsolatedSubnet1/Subnet"
+      }
+    },
+    "ProductionVpcIsolatedSubnet1RouteTable45DC16EC": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "BlastRadiusDemoBaseline/ProductionVpc/IsolatedSubnet1"
+          }
+        ],
+        "VpcId": {
+          "Ref": "ProductionVpc25472B74"
+        }
+      },
+      "Metadata": {
+        "aws:cdk:path": "BlastRadiusDemoBaseline/ProductionVpc/IsolatedSubnet1/RouteTable"
+      }
+    },
+    "ProductionVpcIsolatedSubnet1RouteTableAssociation0D7DC138": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "ProductionVpcIsolatedSubnet1RouteTable45DC16EC"
+        },
+        "SubnetId": {
+          "Ref": "ProductionVpcIsolatedSubnet1Subnet39F9464D"
+        }
+      },
+      "Metadata": {
+        "aws:cdk:path": "BlastRadiusDemoBaseline/ProductionVpc/IsolatedSubnet1/RouteTableAssociation"
+      }
+    },
+    "ProductionVpcIsolatedSubnet2SubnetE65A0048": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "AvailabilityZone": "us-east-1b",
+        "CidrBlock": "10.0.5.0/24",
+        "MapPublicIpOnLaunch": false,
+        "Tags": [
+          {
+            "Key": "aws-cdk:subnet-name",
+            "Value": "Isolated"
+          },
+          {
+            "Key": "aws-cdk:subnet-type",
+            "Value": "Isolated"
+          },
+          {
+            "Key": "Name",
+            "Value": "BlastRadiusDemoBaseline/ProductionVpc/IsolatedSubnet2"
+          }
+        ],
+        "VpcId": {
+          "Ref": "ProductionVpc25472B74"
+        }
+      },
+      "Metadata": {
+        "aws:cdk:path": "BlastRadiusDemoBaseline/ProductionVpc/IsolatedSubnet2/Subnet"
+      }
+    },
+    "ProductionVpcIsolatedSubnet2RouteTableD4D9D27C": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "BlastRadiusDemoBaseline/ProductionVpc/IsolatedSubnet2"
+          }
+        ],
+        "VpcId": {
+          "Ref": "ProductionVpc25472B74"
+        }
+      },
+      "Metadata": {
+        "aws:cdk:path": "BlastRadiusDemoBaseline/ProductionVpc/IsolatedSubnet2/RouteTable"
+      }
+    },
+    "ProductionVpcIsolatedSubnet2RouteTableAssociation847E1CE3": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "ProductionVpcIsolatedSubnet2RouteTableD4D9D27C"
+        },
+        "SubnetId": {
+          "Ref": "ProductionVpcIsolatedSubnet2SubnetE65A0048"
+        }
+      },
+      "Metadata": {
+        "aws:cdk:path": "BlastRadiusDemoBaseline/ProductionVpc/IsolatedSubnet2/RouteTableAssociation"
+      }
+    },
+    "ProductionVpcIGWE32DC93C": {
+      "Type": "AWS::EC2::InternetGateway",
+      "Properties": {
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "BlastRadiusDemoBaseline/ProductionVpc"
+          }
+        ]
+      },
+      "Metadata": {
+        "aws:cdk:path": "BlastRadiusDemoBaseline/ProductionVpc/IGW"
+      }
+    },
+    "ProductionVpcVPCGW781F77FA": {
+      "Type": "AWS::EC2::VPCGatewayAttachment",
+      "Properties": {
+        "InternetGatewayId": {
+          "Ref": "ProductionVpcIGWE32DC93C"
+        },
+        "VpcId": {
+          "Ref": "ProductionVpc25472B74"
+        }
+      },
+      "Metadata": {
+        "aws:cdk:path": "BlastRadiusDemoBaseline/ProductionVpc/VPCGW"
+      }
+    },
+    "WebSecurityGroup73AF7387": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Security group for web-facing services",
+        "SecurityGroupEgress": [
+          {
+            "CidrIp": "0.0.0.0/0",
+            "Description": "Allow all outbound traffic by default",
+            "IpProtocol": "-1"
+          }
+        ],
+        "SecurityGroupIngress": [
+          {
+            "CidrIp": "10.0.0.0/8",
+            "Description": "Allow HTTP from internal network only",
+            "FromPort": 80,
+            "IpProtocol": "tcp",
+            "ToPort": 80
+          },
+          {
+            "CidrIp": "10.0.0.0/8",
+            "Description": "Allow HTTPS from internal network only",
+            "FromPort": 443,
+            "IpProtocol": "tcp",
+            "ToPort": 443
+          }
+        ],
+        "VpcId": {
+          "Ref": "ProductionVpc25472B74"
+        }
+      },
+      "Metadata": {
+        "aws:cdk:path": "BlastRadiusDemoBaseline/WebSecurityGroup/Resource"
+      }
+    },
+    "WebSecurityGroupfromBlastRadiusDemoBaselineWebServiceLBSecurityGroupF31EBE6F8089420897": {
+      "Type": "AWS::EC2::SecurityGroupIngress",
+      "Properties": {
+        "Description": "Load balancer to target",
+        "FromPort": 80,
+        "GroupId": {
+          "Fn::GetAtt": [
+            "WebSecurityGroup73AF7387",
+            "GroupId"
+          ]
+        },
+        "IpProtocol": "tcp",
+        "SourceSecurityGroupId": {
+          "Fn::GetAtt": [
+            "WebServiceLBSecurityGroup66424F28",
+            "GroupId"
+          ]
+        },
+        "ToPort": 80
+      },
+      "Metadata": {
+        "aws:cdk:path": "BlastRadiusDemoBaseline/WebSecurityGroup/from BlastRadiusDemoBaselineWebServiceLBSecurityGroupF31EBE6F:80"
+      }
+    },
+    "ProductionCluster0525040D": {
+      "Type": "AWS::ECS::Cluster",
+      "Properties": {
+        "ClusterName": "blast-radius-demo-cluster"
+      },
+      "Metadata": {
+        "aws:cdk:path": "BlastRadiusDemoBaseline/ProductionCluster/Resource"
+      }
+    },
+    "WebServiceLB9CAD0C10": {
+      "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
+      "Properties": {
+        "LoadBalancerAttributes": [
+          {
+            "Key": "deletion_protection.enabled",
+            "Value": "false"
+          }
+        ],
+        "Scheme": "internet-facing",
+        "SecurityGroups": [
+          {
+            "Fn::GetAtt": [
+              "WebServiceLBSecurityGroup66424F28",
+              "GroupId"
+            ]
+          }
+        ],
+        "Subnets": [
+          {
+            "Ref": "ProductionVpcPublicSubnet1SubnetD1B80133"
+          },
+          {
+            "Ref": "ProductionVpcPublicSubnet2Subnet95C9DA55"
+          }
+        ],
+        "Type": "application"
+      },
+      "DependsOn": [
+        "ProductionVpcPublicSubnet1DefaultRouteB2D4E6E0",
+        "ProductionVpcPublicSubnet1RouteTableAssociationE3A3CB62",
+        "ProductionVpcPublicSubnet2DefaultRoute352EA01E",
+        "ProductionVpcPublicSubnet2RouteTableAssociationA4E94588"
+      ],
+      "Metadata": {
+        "aws:cdk:path": "BlastRadiusDemoBaseline/WebService/LB/Resource"
+      }
+    },
+    "WebServiceLBSecurityGroup66424F28": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Automatically created Security Group for ELB BlastRadiusDemoBaselineWebServiceLBCCF5BF1A",
+        "SecurityGroupIngress": [
+          {
+            "CidrIp": "0.0.0.0/0",
+            "Description": "Allow from anyone on port 80",
+            "FromPort": 80,
+            "IpProtocol": "tcp",
+            "ToPort": 80
+          }
+        ],
+        "VpcId": {
+          "Ref": "ProductionVpc25472B74"
+        }
+      },
+      "Metadata": {
+        "aws:cdk:path": "BlastRadiusDemoBaseline/WebService/LB/SecurityGroup/Resource"
+      }
+    },
+    "WebServiceLBSecurityGrouptoBlastRadiusDemoBaselineWebSecurityGroup6CEEA2A080F5FE2FAF": {
+      "Type": "AWS::EC2::SecurityGroupEgress",
+      "Properties": {
+        "Description": "Load balancer to target",
+        "DestinationSecurityGroupId": {
+          "Fn::GetAtt": [
+            "WebSecurityGroup73AF7387",
+            "GroupId"
+          ]
+        },
+        "FromPort": 80,
+        "GroupId": {
+          "Fn::GetAtt": [
+            "WebServiceLBSecurityGroup66424F28",
+            "GroupId"
+          ]
+        },
+        "IpProtocol": "tcp",
+        "ToPort": 80
+      },
+      "Metadata": {
+        "aws:cdk:path": "BlastRadiusDemoBaseline/WebService/LB/SecurityGroup/to BlastRadiusDemoBaselineWebSecurityGroup6CEEA2A0:80"
+      }
+    },
+    "WebServiceLBPublicListenerEA62BC7F": {
+      "Type": "AWS::ElasticLoadBalancingV2::Listener",
+      "Properties": {
+        "DefaultActions": [
+          {
+            "TargetGroupArn": {
+              "Ref": "WebServiceLBPublicListenerECSGroup909B7188"
+            },
+            "Type": "forward"
+          }
+        ],
+        "LoadBalancerArn": {
+          "Ref": "WebServiceLB9CAD0C10"
+        },
+        "Port": 80,
+        "Protocol": "HTTP"
+      },
+      "Metadata": {
+        "aws:cdk:path": "BlastRadiusDemoBaseline/WebService/LB/PublicListener/Resource"
+      }
+    },
+    "WebServiceLBPublicListenerECSGroup909B7188": {
+      "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
+      "Properties": {
+        "HealthCheckPath": "/",
+        "HealthyThresholdCount": 2,
+        "Port": 80,
+        "Protocol": "HTTP",
+        "TargetGroupAttributes": [
+          {
+            "Key": "stickiness.enabled",
+            "Value": "false"
+          }
+        ],
+        "TargetType": "ip",
+        "UnhealthyThresholdCount": 3,
+        "VpcId": {
+          "Ref": "ProductionVpc25472B74"
+        }
+      },
+      "Metadata": {
+        "aws:cdk:path": "BlastRadiusDemoBaseline/WebService/LB/PublicListener/ECSGroup/Resource"
+      }
+    },
+    "WebServiceTaskDefTaskRole39B734D2": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Statement": [
+            {
+              "Action": "sts:AssumeRole",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "ecs-tasks.amazonaws.com"
+              }
+            }
+          ],
+          "Version": "2012-10-17"
+        }
+      },
+      "Metadata": {
+        "aws:cdk:path": "BlastRadiusDemoBaseline/WebService/TaskDef/TaskRole/Resource"
+      }
+    },
+    "WebServiceTaskDef0DAE0F9A": {
+      "Type": "AWS::ECS::TaskDefinition",
+      "Properties": {
+        "ContainerDefinitions": [
+          {
+            "Essential": true,
+            "Image": "amazon/amazon-ecs-sample",
+            "LogConfiguration": {
+              "LogDriver": "awslogs",
+              "Options": {
+                "awslogs-group": {
+                  "Ref": "WebServiceTaskDefwebLogGroup66B9C4A1"
+                },
+                "awslogs-stream-prefix": "WebService",
+                "awslogs-region": "us-east-1"
+              }
+            },
+            "Name": "web",
+            "PortMappings": [
+              {
+                "ContainerPort": 80,
+                "Protocol": "tcp"
+              }
+            ]
+          }
+        ],
+        "Cpu": "256",
+        "ExecutionRoleArn": {
+          "Fn::GetAtt": [
+            "WebServiceTaskDefExecutionRole9E63B6B2",
+            "Arn"
+          ]
+        },
+        "Family": "BlastRadiusDemoBaselineWebServiceTaskDef768699E2",
+        "Memory": "512",
+        "NetworkMode": "awsvpc",
+        "RequiresCompatibilities": [
+          "FARGATE"
+        ],
+        "TaskRoleArn": {
+          "Fn::GetAtt": [
+            "WebServiceTaskDefTaskRole39B734D2",
+            "Arn"
+          ]
+        }
+      },
+      "Metadata": {
+        "aws:cdk:path": "BlastRadiusDemoBaseline/WebService/TaskDef/Resource"
+      }
+    },
+    "WebServiceTaskDefwebLogGroup66B9C4A1": {
+      "Type": "AWS::Logs::LogGroup",
+      "UpdateReplacePolicy": "Retain",
+      "DeletionPolicy": "Retain",
+      "Metadata": {
+        "aws:cdk:path": "BlastRadiusDemoBaseline/WebService/TaskDef/web/LogGroup/Resource"
+      }
+    },
+    "WebServiceTaskDefExecutionRole9E63B6B2": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Statement": [
+            {
+              "Action": "sts:AssumeRole",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "ecs-tasks.amazonaws.com"
+              }
+            }
+          ],
+          "Version": "2012-10-17"
+        }
+      },
+      "Metadata": {
+        "aws:cdk:path": "BlastRadiusDemoBaseline/WebService/TaskDef/ExecutionRole/Resource"
+      }
+    },
+    "WebServiceTaskDefExecutionRoleDefaultPolicyF65F7670": {
+      "Type": "AWS::IAM::Policy",
+      "Properties": {
+        "PolicyDocument": {
+          "Statement": [
+            {
+              "Action": [
+                "logs:CreateLogStream",
+                "logs:PutLogEvents"
+              ],
+              "Effect": "Allow",
+              "Resource": {
+                "Fn::GetAtt": [
+                  "WebServiceTaskDefwebLogGroup66B9C4A1",
+                  "Arn"
+                ]
+              }
+            }
+          ],
+          "Version": "2012-10-17"
+        },
+        "PolicyName": "WebServiceTaskDefExecutionRoleDefaultPolicyF65F7670",
+        "Roles": [
+          {
+            "Ref": "WebServiceTaskDefExecutionRole9E63B6B2"
+          }
+        ]
+      },
+      "Metadata": {
+        "aws:cdk:path": "BlastRadiusDemoBaseline/WebService/TaskDef/ExecutionRole/DefaultPolicy/Resource"
+      }
+    },
+    "WebService5EA589E6": {
+      "Type": "AWS::ECS::Service",
+      "Properties": {
+        "Cluster": {
+          "Ref": "ProductionCluster0525040D"
+        },
+        "DeploymentConfiguration": {
+          "Alarms": {
+            "AlarmNames": [],
+            "Enable": false,
+            "Rollback": false
+          },
+          "MaximumPercent": 200,
+          "MinimumHealthyPercent": 50
+        },
+        "DesiredCount": 2,
+        "EnableECSManagedTags": false,
+        "HealthCheckGracePeriodSeconds": 60,
+        "LaunchType": "FARGATE",
+        "LoadBalancers": [
+          {
+            "ContainerName": "web",
+            "ContainerPort": 80,
+            "TargetGroupArn": {
+              "Ref": "WebServiceLBPublicListenerECSGroup909B7188"
+            }
+          }
+        ],
+        "NetworkConfiguration": {
+          "AwsvpcConfiguration": {
+            "AssignPublicIp": "DISABLED",
+            "SecurityGroups": [
+              {
+                "Fn::GetAtt": [
+                  "WebSecurityGroup73AF7387",
+                  "GroupId"
+                ]
+              }
+            ],
+            "Subnets": [
+              {
+                "Ref": "ProductionVpcPrivateSubnet1SubnetCF1A85CA"
+              },
+              {
+                "Ref": "ProductionVpcPrivateSubnet2SubnetE65F16E9"
+              }
+            ]
+          }
+        },
+        "TaskDefinition": {
+          "Ref": "WebServiceTaskDef0DAE0F9A"
+        }
+      },
+      "DependsOn": [
+        "WebServiceLBPublicListenerECSGroup909B7188",
+        "WebServiceLBPublicListenerEA62BC7F",
+        "WebServiceTaskDefTaskRole39B734D2"
+      ],
+      "Metadata": {
+        "aws:cdk:path": "BlastRadiusDemoBaseline/WebService/Service/Service"
+      }
+    },
+    "DatabaseSecurityGroup7319C0F6": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Security group for Aurora PostgreSQL",
+        "SecurityGroupEgress": [
+          {
+            "CidrIp": "0.0.0.0/0",
+            "Description": "Allow all outbound traffic by default",
+            "IpProtocol": "-1"
+          }
+        ],
+        "VpcId": {
+          "Ref": "ProductionVpc25472B74"
+        }
+      },
+      "Metadata": {
+        "aws:cdk:path": "BlastRadiusDemoBaseline/DatabaseSecurityGroup/Resource"
+      }
+    },
+    "DatabaseSecurityGroupfromBlastRadiusDemoBaselineWebSecurityGroup6CEEA2A05432F74BECE6": {
+      "Type": "AWS::EC2::SecurityGroupIngress",
+      "Properties": {
+        "Description": "Allow PostgreSQL from web services",
+        "FromPort": 5432,
+        "GroupId": {
+          "Fn::GetAtt": [
+            "DatabaseSecurityGroup7319C0F6",
+            "GroupId"
+          ]
+        },
+        "IpProtocol": "tcp",
+        "SourceSecurityGroupId": {
+          "Fn::GetAtt": [
+            "WebSecurityGroup73AF7387",
+            "GroupId"
+          ]
+        },
+        "ToPort": 5432
+      },
+      "Metadata": {
+        "aws:cdk:path": "BlastRadiusDemoBaseline/DatabaseSecurityGroup/from BlastRadiusDemoBaselineWebSecurityGroup6CEEA2A0:5432"
+      }
+    },
+    "AuroraClusterSubnetsF3E9E6AD": {
+      "Type": "AWS::RDS::DBSubnetGroup",
+      "Properties": {
+        "DBSubnetGroupDescription": "Subnets for AuroraCluster database",
+        "SubnetIds": [
+          {
+            "Ref": "ProductionVpcIsolatedSubnet1Subnet39F9464D"
+          },
+          {
+            "Ref": "ProductionVpcIsolatedSubnet2SubnetE65A0048"
+          }
+        ]
+      },
+      "Metadata": {
+        "aws:cdk:path": "BlastRadiusDemoBaseline/AuroraCluster/Subnets/Default"
+      }
+    },
+    "AuroraClusterSecret8E4F2BC8": {
+      "Type": "AWS::SecretsManager::Secret",
+      "Properties": {
+        "Description": {
+          "Fn::Join": [
+            "",
+            [
+              "Generated by the CDK for stack: ",
+              {
+                "Ref": "AWS::StackName"
+              }
+            ]
+          ]
+        },
+        "GenerateSecretString": {
+          "ExcludeCharacters": " %+~`#$&*()|[]{}:;<>?!'/@\"\\",
+          "GenerateStringKey": "password",
+          "PasswordLength": 30,
+          "SecretStringTemplate": "{\"username\":\"postgres\"}"
+        }
+      },
+      "UpdateReplacePolicy": "Delete",
+      "DeletionPolicy": "Delete",
+      "Metadata": {
+        "aws:cdk:path": "BlastRadiusDemoBaseline/AuroraCluster/Secret/Resource"
+      }
+    },
+    "AuroraClusterSecretAttachmentDB8032DA": {
+      "Type": "AWS::SecretsManager::SecretTargetAttachment",
+      "Properties": {
+        "SecretId": {
+          "Ref": "AuroraClusterSecret8E4F2BC8"
+        },
+        "TargetId": {
+          "Ref": "AuroraCluster23D869C0"
+        },
+        "TargetType": "AWS::RDS::DBCluster"
+      },
+      "Metadata": {
+        "aws:cdk:path": "BlastRadiusDemoBaseline/AuroraCluster/Secret/Attachment/Resource"
+      }
+    },
+    "AuroraCluster23D869C0": {
+      "Type": "AWS::RDS::DBCluster",
+      "Properties": {
+        "CopyTagsToSnapshot": true,
+        "DBClusterParameterGroupName": "default.aurora-postgresql15",
+        "DBSubnetGroupName": {
+          "Ref": "AuroraClusterSubnetsF3E9E6AD"
+        },
+        "DatabaseName": "appdb",
+        "Engine": "aurora-postgresql",
+        "EngineVersion": "15.8",
+        "MasterUserPassword": {
+          "Fn::Join": [
+            "",
+            [
+              "{{resolve:secretsmanager:",
+              {
+                "Ref": "AuroraClusterSecret8E4F2BC8"
+              },
+              ":SecretString:password::}}"
+            ]
+          ]
+        },
+        "MasterUsername": {
+          "Fn::Join": [
+            "",
+            [
+              "{{resolve:secretsmanager:",
+              {
+                "Ref": "AuroraClusterSecret8E4F2BC8"
+              },
+              ":SecretString:username::}}"
+            ]
+          ]
+        },
+        "Port": 5432,
+        "VpcSecurityGroupIds": [
+          {
+            "Fn::GetAtt": [
+              "DatabaseSecurityGroup7319C0F6",
+              "GroupId"
+            ]
+          }
+        ]
+      },
+      "UpdateReplacePolicy": "Delete",
+      "DeletionPolicy": "Delete",
+      "Metadata": {
+        "aws:cdk:path": "BlastRadiusDemoBaseline/AuroraCluster/Resource"
+      }
+    },
+    "AuroraClusterWriterAA1AB06C": {
+      "Type": "AWS::RDS::DBInstance",
+      "Properties": {
+        "DBClusterIdentifier": {
+          "Ref": "AuroraCluster23D869C0"
+        },
+        "DBInstanceClass": "db.r6g.xlarge",
+        "Engine": "aurora-postgresql",
+        "PromotionTier": 0,
+        "PubliclyAccessible": false
+      },
+      "DependsOn": [
+        "ProductionVpcIsolatedSubnet1RouteTableAssociation0D7DC138",
+        "ProductionVpcIsolatedSubnet2RouteTableAssociation847E1CE3"
+      ],
+      "UpdateReplacePolicy": "Delete",
+      "DeletionPolicy": "Delete",
+      "Metadata": {
+        "aws:cdk:path": "BlastRadiusDemoBaseline/AuroraCluster/Writer/Resource"
+      }
+    },
+    "BackgroundProcessorServiceRole9635DB92": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Statement": [
+            {
+              "Action": "sts:AssumeRole",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              }
+            }
+          ],
+          "Version": "2012-10-17"
+        },
+        "ManagedPolicyArns": [
+          {
+            "Fn::Join": [
+              "",
+              [
+                "arn:",
+                {
+                  "Ref": "AWS::Partition"
+                },
+                ":iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+              ]
+            ]
+          },
+          {
+            "Fn::Join": [
+              "",
+              [
+                "arn:",
+                {
+                  "Ref": "AWS::Partition"
+                },
+                ":iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
+              ]
+            ]
+          }
+        ]
+      },
+      "DependsOn": [
+        "ProductionVpcPrivateSubnet1DefaultRoute73423744",
+        "ProductionVpcPrivateSubnet1RouteTableAssociationCD30BC34",
+        "ProductionVpcPrivateSubnet2DefaultRoute2444B7E2",
+        "ProductionVpcPrivateSubnet2RouteTableAssociation30B0B69B"
+      ],
+      "Metadata": {
+        "aws:cdk:path": "BlastRadiusDemoBaseline/BackgroundProcessor/ServiceRole/Resource"
+      }
+    },
+    "BackgroundProcessorF9328D71": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "Code": {
+          "ZipFile": "\n        exports.handler = async (event) => {\n          console.log('Processing event:', JSON.stringify(event));\n          return { statusCode: 200, body: 'Processed' };\n        };\n      "
+        },
+        "Environment": {
+          "Variables": {
+            "DB_HOST": {
+              "Fn::GetAtt": [
+                "AuroraCluster23D869C0",
+                "Endpoint.Address"
+              ]
+            },
+            "DB_PORT": "5432"
+          }
+        },
+        "Handler": "index.handler",
+        "Role": {
+          "Fn::GetAtt": [
+            "BackgroundProcessorServiceRole9635DB92",
+            "Arn"
+          ]
+        },
+        "Runtime": "nodejs20.x",
+        "Timeout": 30,
+        "VpcConfig": {
+          "SecurityGroupIds": [
+            {
+              "Fn::GetAtt": [
+                "WebSecurityGroup73AF7387",
+                "GroupId"
+              ]
+            }
+          ],
+          "SubnetIds": [
+            {
+              "Ref": "ProductionVpcPrivateSubnet1SubnetCF1A85CA"
+            },
+            {
+              "Ref": "ProductionVpcPrivateSubnet2SubnetE65F16E9"
+            }
+          ]
+        }
+      },
+      "DependsOn": [
+        "BackgroundProcessorServiceRole9635DB92",
+        "ProductionVpcPrivateSubnet1DefaultRoute73423744",
+        "ProductionVpcPrivateSubnet1RouteTableAssociationCD30BC34",
+        "ProductionVpcPrivateSubnet2DefaultRoute2444B7E2",
+        "ProductionVpcPrivateSubnet2RouteTableAssociation30B0B69B"
+      ],
+      "Metadata": {
+        "aws:cdk:path": "BlastRadiusDemoBaseline/BackgroundProcessor/Resource"
+      }
+    },
+    "AssetsBucket5CB76180": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "AES256"
+              }
+            }
+          ]
+        },
+        "BucketName": "blast-radius-demo-assets-136347816899",
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true
+        },
+        "Tags": [
+          {
+            "Key": "aws-cdk:auto-delete-objects",
+            "Value": "true"
+          }
+        ]
+      },
+      "UpdateReplacePolicy": "Delete",
+      "DeletionPolicy": "Delete",
+      "Metadata": {
+        "aws:cdk:path": "BlastRadiusDemoBaseline/AssetsBucket/Resource"
+      }
+    },
+    "AssetsBucketPolicyFFACF6C4": {
+      "Type": "AWS::S3::BucketPolicy",
+      "Properties": {
+        "Bucket": {
+          "Ref": "AssetsBucket5CB76180"
+        },
+        "PolicyDocument": {
+          "Statement": [
+            {
+              "Action": [
+                "s3:PutBucketPolicy",
+                "s3:GetBucket*",
+                "s3:List*",
+                "s3:DeleteObject*"
+              ],
+              "Effect": "Allow",
+              "Principal": {
+                "AWS": {
+                  "Fn::GetAtt": [
+                    "CustomS3AutoDeleteObjectsCustomResourceProviderRole3B1BD092",
+                    "Arn"
+                  ]
+                }
+              },
+              "Resource": [
+                {
+                  "Fn::GetAtt": [
+                    "AssetsBucket5CB76180",
+                    "Arn"
+                  ]
+                },
+                {
+                  "Fn::Join": [
+                    "",
+                    [
+                      {
+                        "Fn::GetAtt": [
+                          "AssetsBucket5CB76180",
+                          "Arn"
+                        ]
+                      },
+                      "/*"
+                    ]
+                  ]
+                }
+              ]
+            }
+          ],
+          "Version": "2012-10-17"
+        }
+      },
+      "Metadata": {
+        "aws:cdk:path": "BlastRadiusDemoBaseline/AssetsBucket/Policy/Resource"
+      }
+    },
+    "AssetsBucketAutoDeleteObjectsCustomResource51BA1286": {
+      "Type": "Custom::S3AutoDeleteObjects",
+      "Properties": {
+        "ServiceToken": {
+          "Fn::GetAtt": [
+            "CustomS3AutoDeleteObjectsCustomResourceProviderHandler9D90184F",
+            "Arn"
+          ]
+        },
+        "BucketName": {
+          "Ref": "AssetsBucket5CB76180"
+        }
+      },
+      "DependsOn": [
+        "AssetsBucketPolicyFFACF6C4"
+      ],
+      "UpdateReplacePolicy": "Delete",
+      "DeletionPolicy": "Delete",
+      "Metadata": {
+        "aws:cdk:path": "BlastRadiusDemoBaseline/AssetsBucket/AutoDeleteObjectsCustomResource/Default"
+      }
+    },
+    "CustomS3AutoDeleteObjectsCustomResourceProviderRole3B1BD092": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Action": "sts:AssumeRole",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              }
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          {
+            "Fn::Sub": "arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+          }
+        ]
+      },
+      "Metadata": {
+        "aws:cdk:path": "BlastRadiusDemoBaseline/Custom::S3AutoDeleteObjectsCustomResourceProvider/Role"
+      }
+    },
+    "CustomS3AutoDeleteObjectsCustomResourceProviderHandler9D90184F": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "Code": {
+          "S3Bucket": "cdk-hnb659fds-assets-136347816899-us-east-1",
+          "S3Key": "faa95a81ae7d7373f3e1f242268f904eb748d8d0fdd306e8a6fe515a1905a7d6.zip"
+        },
+        "Timeout": 900,
+        "MemorySize": 128,
+        "Handler": "index.handler",
+        "Role": {
+          "Fn::GetAtt": [
+            "CustomS3AutoDeleteObjectsCustomResourceProviderRole3B1BD092",
+            "Arn"
+          ]
+        },
+        "Runtime": "nodejs22.x",
+        "Description": {
+          "Fn::Join": [
+            "",
+            [
+              "Lambda function for auto-deleting objects in ",
+              {
+                "Ref": "AssetsBucket5CB76180"
+              },
+              " S3 bucket."
+            ]
+          ]
+        }
+      },
+      "DependsOn": [
+        "CustomS3AutoDeleteObjectsCustomResourceProviderRole3B1BD092"
+      ],
+      "Metadata": {
+        "aws:cdk:path": "BlastRadiusDemoBaseline/Custom::S3AutoDeleteObjectsCustomResourceProvider/Handler",
+        "aws:asset:path": "asset.faa95a81ae7d7373f3e1f242268f904eb748d8d0fdd306e8a6fe515a1905a7d6",
+        "aws:asset:property": "Code"
+      }
+    },
+    "CDKMetadata": {
+      "Type": "AWS::CDK::Metadata",
+      "Properties": {
+        "Analytics": "v2:deflate64:H4sIAAAAAAAA/5VUTW/bMAz9LctZ0YYMxbDd4rgtAhSrkRS9DENBy6ynxJYMfbgrDP/3UVYcu+kwYCc9kY8UySdpxVdXX/inD/Bil6I4LiuZ827vQBwZmZ46FCvePTaCbZ7VY7Zhmc8rKfY+V+iCbUI77R0+QF7hZJ9sa2u1kOCkVmdyANfbLCzfwd2Cwxd4ZZmRLcEp8VY5NIRHQqzktFs7qvVXjcqxPQpvpHu9Ndo3Qw3/NGxVadDad/brwdwzFJZ3m8pbOj2QRngDpoTQlT2m+CyVHHu6tGjlQCo0M9spdo+mlSLOKcLhuKcGXGjV8nXT0JSHad1pKBKoQAksLsKxAuukqIiRDwypypbk+nv00MSb/ZwnqTd14ox45n+gk0mBcZCzbc8k1Lzb6aj7sGaa4gahIupZpUua5p0uzylG3DNTkCsFBzlYHKcc5T+z02RuGMmkm4l3JE1mSqXJVlkXeuyZHSi2BgUlGhJ0UDtExSV2MrtFZ8Klh5qAOi+AdzdeiVH0EdNJn3mXeHGMBUX0o1vU8rdUi2+L+QMLL4vog8vySF17p1Os0OF9fkDh7KL/yaJrGud8/x+5YwC9aoehk5C679kOrfYmXsN77xpPhdMMdT13TPiNKzO6lQWahFRg9LbRUfaS7l/PlC6QH+zHdnXFv9LPcrBSLo1XTtbId3H9A7ns7WN2BAAA"
+      },
+      "Metadata": {
+        "aws:cdk:path": "BlastRadiusDemoBaseline/CDKMetadata/Default"
+      }
+    }
+  },
+  "Outputs": {
+    "WebServiceLoadBalancerDNSE01F32A9": {
+      "Value": {
+        "Fn::GetAtt": [
+          "WebServiceLB9CAD0C10",
+          "DNSName"
+        ]
+      }
+    },
+    "WebServiceServiceURL970B691A": {
+      "Value": {
+        "Fn::Join": [
+          "",
+          [
+            "http://",
+            {
+              "Fn::GetAtt": [
+                "WebServiceLB9CAD0C10",
+                "DNSName"
+              ]
+            }
+          ]
+        ]
+      }
+    },
+    "VpcId": {
+      "Value": {
+        "Ref": "ProductionVpc25472B74"
+      }
+    },
+    "ClusterEndpoint": {
+      "Value": {
+        "Fn::GetAtt": [
+          "AuroraCluster23D869C0",
+          "Endpoint.Address"
+        ]
+      }
+    },
+    "LoadBalancerDns": {
+      "Value": {
+        "Fn::GetAtt": [
+          "WebServiceLB9CAD0C10",
+          "DNSName"
+        ]
+      }
+    },
+    "LambdaArn": {
+      "Value": {
+        "Fn::GetAtt": [
+          "BackgroundProcessorF9328D71",
+          "Arn"
+        ]
+      }
+    },
+    "BucketName": {
+      "Value": {
+        "Ref": "AssetsBucket5CB76180"
+      }
+    }
+  },
+  "Parameters": {
+    "BootstrapVersion": {
+      "Type": "AWS::SSM::Parameter::Value<String>",
+      "Default": "/cdk-bootstrap/hnb659fds/version",
+      "Description": "Version of the CDK Bootstrap resources in this environment, automatically retrieved from SSM Parameter Store. [cdk:skip]"
+    }
+  }
+}

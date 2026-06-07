@@ -1,19 +1,60 @@
 ← Back to [Architecture Walkthrough](../architecture-walkthrough.md)
 
-# Risk Summary Handler
+# Risk Summary Generator
 
-**`risk-summary/handler.ts`** — Optional AI-powered feature. Takes the top-scoring resources and asks Amazon Bedrock (Claude) to write a plain-English explanation of the risk.
+**`risk-summary/handler.ts`** — Generates a natural language summary of the blast radius analysis using Amazon Bedrock.
 
-**Why it exists:** Engineers can read scores and graphs, but team leads want a quick "what does this mean?" without parsing numbers. The summary says things like: "The proposed security group change puts your production RDS database at critical risk because it's directly attached via the EC2 instance that serves as the database proxy."
+**What it does:**
+1. Checks feature flag (`ENABLE_BEDROCK_SUMMARY` or `ENABLE_BEDROCK` env var)
+2. If disabled → returns `{ skipped: true }`, pipeline continues
+3. Selects the top 3 highest-scoring resources
+4. Builds a prompt with resource details and risk summary
+5. Invokes Bedrock (Claude Haiku 4.5 via inference profile)
+6. Enforces 500-word limit on the response
+7. **Writes the summary back to S3** — reads the existing `visualization.json`, appends `naturalLanguageSummary`, writes it back
+8. Returns `{ summary, generationDurationMs, skipped: false }`
 
-**How it works:**
-1. **Feature flag check** — if `ENABLE_BEDROCK_SUMMARY` is not `true`/`1`, returns immediately. No Bedrock call, no cost.
-2. **Select top 3** — picks the 3 highest-scoring resources (or all if fewer than 3). Focus on the scariest ones.
-3. **Build a prompt** — structured prompt with resource details, scores, chains, and overall summary.
-4. **Call Bedrock** — invokes Claude 3 Haiku with a 15-second timeout.
-5. **Enforce word limit** — truncates to 500 words at a sentence boundary.
-6. **Graceful failure** — if Bedrock is slow/unavailable, returns `{ summary: undefined, error: "..." }`. The rest of the analysis is still available.
+**Input from the pipeline:**
+```typescript
+interface SummaryInput {
+  analysisId: string;
+  scoredResources: ScoredResource[];
+  riskSummary: RiskSummary;
+  manifest: ResourceChangeManifest;
+  enableSummary?: boolean;
+}
+```
 
-**Why Claude 3 Haiku?** Cheapest and fastest Bedrock model. A summary costs ~$0.0005 (half a cent).
+**Feature flags (dual check):**
+```typescript
+const flag = process.env.ENABLE_BEDROCK_SUMMARY ?? process.env.ENABLE_BEDROCK;
+return flag === 'true' || flag === '1';
+```
 
-**The 15-second timeout:** If Bedrock is slow, we don't hold up the pipeline. The timeout races against the Bedrock call — whichever finishes first wins. The summary is purely additive — everything else works without it.
+This allows the CDK stack to set either env var. The `ENABLE_BEDROCK` prop on the stack controls both.
+
+**Model configuration:**
+- Default: `anthropic.claude-haiku-4-5-20251001-v1:0`
+- Override via: `BEDROCK_MODEL_ID` env var
+- Production uses inference profile: `global.anthropic.claude-haiku-4-5-20251001-v1:0`
+
+**Why inference profiles?** Bedrock requires newer models to be invoked via inference profiles rather than direct model IDs. The profile format is `us.anthropic.claude-*` or `global.anthropic.claude-*`.
+
+**S3 write-back:** After generating the summary, the Lambda reads the existing `analyses/{analysisId}/visualization.json` from S3, adds the `naturalLanguageSummary` field, and writes it back. This is best-effort — if S3 fails, the pipeline still succeeds (just without the summary in the stored results).
+
+**Timeout:** 30 seconds total (15s for Bedrock + overhead for S3 read/write). The pipeline's retry policy handles transient failures.
+
+**Graceful degradation:** On any failure (Bedrock timeout, access denied, empty response), returns `{ skipped: false, error: "message" }` instead of throwing. The pipeline continues normally.
+
+**IAM permissions:**
+- `bedrock:InvokeModel` on `foundation-model/*` and `inference-profile/*`
+- S3 read/write on the results bucket
+
+**Pipeline position:** Runs conditionally after VisualizationPrep:
+```
+VisualizationPrep → NeedsSummaryGeneration?
+  ├─ options.enableSummary = true → SummaryGeneration → MarkComplete
+  └─ otherwise → MarkComplete
+```
+
+The `NeedsSummaryGeneration` choice uses `Condition.and(isPresent(...), booleanEquals(...))` to gracefully skip if the field is missing (rather than crashing the pipeline).

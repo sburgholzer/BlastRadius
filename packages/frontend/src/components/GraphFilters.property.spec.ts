@@ -81,6 +81,7 @@ function arbitraryFilterState(
     sourceTools: fc
       .subarray(availableProviders.length > 0 ? availableProviders : ['none'])
       .map((arr) => new Set(arr)),
+    showDirectChanges: fc.boolean(),
   });
 }
 
@@ -169,7 +170,7 @@ describe('Feature: blast-radius-visualizer, Property 12: Graph Filtering Returns
         const emptyFilters: GraphFilterState = {
           riskCategories: new Set(),
           resourceTypes: new Set(),
-          sourceTools: new Set(),
+          sourceTools: new Set(), showDirectChanges: true,
         };
 
         const result = applyFilters(resources, emptyFilters);

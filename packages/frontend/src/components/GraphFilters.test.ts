@@ -57,7 +57,7 @@ describe('applyFilters', () => {
     const filters: GraphFilterState = {
       riskCategories: new Set(),
       resourceTypes: new Set(),
-      sourceTools: new Set(),
+      sourceTools: new Set(), showDirectChanges: true,
     };
     const result = applyFilters(resources, filters);
     expect(result).toHaveLength(5);
@@ -68,7 +68,7 @@ describe('applyFilters', () => {
     const filters: GraphFilterState = {
       riskCategories: new Set<RiskCategory>(['Critical']),
       resourceTypes: new Set(),
-      sourceTools: new Set(),
+      sourceTools: new Set(), showDirectChanges: true,
     };
     const result = applyFilters(resources, filters);
     expect(result).toHaveLength(1);
@@ -79,7 +79,7 @@ describe('applyFilters', () => {
     const filters: GraphFilterState = {
       riskCategories: new Set<RiskCategory>(['Critical', 'High']),
       resourceTypes: new Set(),
-      sourceTools: new Set(),
+      sourceTools: new Set(), showDirectChanges: true,
     };
     const result = applyFilters(resources, filters);
     expect(result).toHaveLength(3);
@@ -90,7 +90,7 @@ describe('applyFilters', () => {
     const filters: GraphFilterState = {
       riskCategories: new Set(),
       resourceTypes: new Set(['AWS::S3::Bucket']),
-      sourceTools: new Set(),
+      sourceTools: new Set(), showDirectChanges: true,
     };
     const result = applyFilters(resources, filters);
     expect(result).toHaveLength(1);
@@ -101,7 +101,7 @@ describe('applyFilters', () => {
     const filters: GraphFilterState = {
       riskCategories: new Set(),
       resourceTypes: new Set(),
-      sourceTools: new Set(['azure']),
+      sourceTools: new Set(['azure']), showDirectChanges: true,
     };
     const result = applyFilters(resources, filters);
     expect(result).toHaveLength(1);
@@ -112,7 +112,7 @@ describe('applyFilters', () => {
     const filters: GraphFilterState = {
       riskCategories: new Set<RiskCategory>(['High']),
       resourceTypes: new Set(['AWS::EC2::Instance']),
-      sourceTools: new Set(['aws']),
+      sourceTools: new Set(['aws']), showDirectChanges: true,
     };
     const result = applyFilters(resources, filters);
     expect(result).toHaveLength(1);
@@ -123,7 +123,7 @@ describe('applyFilters', () => {
     const filters: GraphFilterState = {
       riskCategories: new Set<RiskCategory>(['Critical']),
       resourceTypes: new Set(['AWS::S3::Bucket']),
-      sourceTools: new Set(),
+      sourceTools: new Set(), showDirectChanges: true,
     };
     const result = applyFilters(resources, filters);
     expect(result).toHaveLength(0);
@@ -133,7 +133,7 @@ describe('applyFilters', () => {
     const filters: GraphFilterState = {
       riskCategories: new Set<RiskCategory>(['Critical']),
       resourceTypes: new Set(),
-      sourceTools: new Set(),
+      sourceTools: new Set(), showDirectChanges: true,
     };
     const result = applyFilters([], filters);
     expect(result).toHaveLength(0);
@@ -143,7 +143,7 @@ describe('applyFilters', () => {
     const filters: GraphFilterState = {
       riskCategories: new Set(),
       resourceTypes: new Set(['AWS::EC2::Instance', 'AWS::S3::Bucket']),
-      sourceTools: new Set(),
+      sourceTools: new Set(), showDirectChanges: true,
     };
     const result = applyFilters(resources, filters);
     expect(result).toHaveLength(2);

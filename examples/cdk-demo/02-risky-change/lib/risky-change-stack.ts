@@ -114,7 +114,7 @@ export class RiskyChangeStack extends cdk.Stack {
     //   - If there's no reader instance, there's a full outage window
     const auroraCluster = new rds.DatabaseCluster(this, 'AuroraCluster', {
       engine: rds.DatabaseClusterEngine.auroraPostgres({
-        version: rds.AuroraPostgresEngineVersion.VER_15_4,
+        version: rds.AuroraPostgresEngineVersion.VER_15_8,
       }),
       writer: rds.ClusterInstance.provisioned('Writer', {
         instanceType: ec2.InstanceType.of(ec2.InstanceClass.R6G, ec2.InstanceSize.XLARGE), // ⚠️ Changed from LARGE
@@ -169,7 +169,7 @@ export class RiskyChangeStack extends cdk.Stack {
 
 // --- App entry point ---
 const app = new cdk.App();
-new RiskyChangeStack(app, 'BlastRadiusDemoRiskyChange', {
+new RiskyChangeStack(app, 'BlastRadiusDemoBaseline', {
   env: {
     account: process.env.CDK_DEFAULT_ACCOUNT,
     region: process.env.CDK_DEFAULT_REGION || 'us-east-1',

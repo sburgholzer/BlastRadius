@@ -97,7 +97,7 @@ export class BaselineStack extends cdk.Stack {
 
     const auroraCluster = new rds.DatabaseCluster(this, 'AuroraCluster', {
       engine: rds.DatabaseClusterEngine.auroraPostgres({
-        version: rds.AuroraPostgresEngineVersion.VER_15_4,
+        version: rds.AuroraPostgresEngineVersion.VER_15_8,
       }),
       writer: rds.ClusterInstance.provisioned('Writer', {
         instanceType: ec2.InstanceType.of(ec2.InstanceClass.R6G, ec2.InstanceSize.LARGE),

@@ -1,0 +1,51 @@
+[Warning at /BlastRadiusDemoBaseline/WebService/Service] Enable the 'circuitBreaker' property to trigger a quicker deployment failure if tasks are failing to come start (without this setting deployments may take up to 3 hours to fail). [ack: @aws-cdk/aws-ecs:shouldUseCircuitBreaker]
+[Warning at /BlastRadiusDemoBaseline/WebService/Service] minHealthyPercent has not been configured so the default value of 50% is used. The number of running tasks will decrease below the desired count during deployments etc. See https://github.com/aws/aws-cdk/issues/31705 [ack: @aws-cdk/aws-ecs:minHealthyPercent]
+start: Building BlastRadiusDemoBaseline Template
+success: Built BlastRadiusDemoBaseline Template
+start: Publishing BlastRadiusDemoBaseline Template (136347816899-us-east-1-d5b7b8cc)
+success: Published BlastRadiusDemoBaseline Template (136347816899-us-east-1-d5b7b8cc)
+Hold on while we create a read-only change set to get a diff with accurate replacement information (use --method=template to use a less accurate but faster template-only diff)
+
+Stack BlastRadiusDemoBaseline
+Security Group Changes
+┌───┬─────────────────────────────┬─────┬──────────┬─────────────────┐
+│   │ Group                       │ Dir │ Protocol │ Peer            │
+├───┼─────────────────────────────┼─────┼──────────┼─────────────────┤
+│ + │ ${WebSecurityGroup.GroupId} │ In  │ TCP 80   │ 10.0.0.0/8      │
+│ + │ ${WebSecurityGroup.GroupId} │ In  │ TCP 443  │ 10.0.0.0/8      │
+│ - │ ${WebSecurityGroup.GroupId} │ In  │ TCP 80   │ Everyone (IPv4) │
+│ - │ ${WebSecurityGroup.GroupId} │ In  │ TCP 443  │ Everyone (IPv4) │
+└───┴─────────────────────────────┴─────┴──────────┴─────────────────┘
+(NOTE: There may be security-related changes not in this list. See https://github.com/aws/aws-cdk/issues/1299)
+
+Resources
+[~] AWS::EC2::SecurityGroup WebSecurityGroup WebSecurityGroup73AF7387
+ └─ [~] SecurityGroupIngress
+     └─ @@ -1,14 +1,14 @@
+        [ ] [
+        [ ]   {
+        [-]     "CidrIp": "0.0.0.0/0",
+        [-]     "Description": "Allow HTTP from anywhere",
+        [+]     "CidrIp": "10.0.0.0/8",
+        [+]     "Description": "Allow HTTP from internal network only",
+        [ ]     "FromPort": 80,
+        [ ]     "IpProtocol": "tcp",
+        [ ]     "ToPort": 80
+        [ ]   },
+        [ ]   {
+        [-]     "CidrIp": "0.0.0.0/0",
+        [-]     "Description": "Allow HTTPS from anywhere",
+        [+]     "CidrIp": "10.0.0.0/8",
+        [+]     "Description": "Allow HTTPS from internal network only",
+        [ ]     "FromPort": 443,
+        [ ]     "IpProtocol": "tcp",
+        [ ]     "ToPort": 443
+[~] AWS::RDS::DBInstance AuroraCluster/Writer AuroraClusterWriterAA1AB06C
+ └─ [~] DBInstanceClass
+     ├─ [-] db.r6g.large
+     └─ [+] db.r6g.xlarge
+
+
+
+✨  Number of stacks with differences: 1
+

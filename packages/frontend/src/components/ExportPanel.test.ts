@@ -101,7 +101,7 @@ describe('buildJsonExport', () => {
     const filters: GraphFilterState = {
       riskCategories: new Set<RiskCategory>(['Critical', 'High']),
       resourceTypes: new Set(['AWS::EC2::Instance']),
-      sourceTools: new Set(['aws']),
+      sourceTools: new Set(['aws']), showDirectChanges: true,
     };
     const result = buildJsonExport([], 'analysis-1', filters);
     expect(result.filters.riskCategories).toContain('Critical');
@@ -207,7 +207,7 @@ describe('buildPdfContent', () => {
     const filters: GraphFilterState = {
       riskCategories: new Set<RiskCategory>(['High']),
       resourceTypes: new Set(['AWS::Lambda::Function']),
-      sourceTools: new Set(['terraform']),
+      sourceTools: new Set(['terraform']), showDirectChanges: true,
     };
     const content = buildPdfContent([], 'analysis-1', filters);
     expect(content).toContain('High');

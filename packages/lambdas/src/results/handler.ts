@@ -130,7 +130,7 @@ export async function handler(
   event: ResultsInput,
   deps?: ResultsHandlerDeps,
 ): Promise<ResultsResult> {
-  const { docClient, s3Client, authResolver } = deps ?? createDefaultDeps();
+  const { docClient, s3Client, authResolver } = deps && 'docClient' in deps ? deps : createDefaultDeps();
 
   if (!event || typeof event !== 'object') {
     return { error: 'Invalid input: expected an object with an "operation" field', statusCode: 400 };

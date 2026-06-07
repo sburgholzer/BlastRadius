@@ -6,7 +6,26 @@ import { DependencyGraph } from '../components/DependencyGraph';
 import { ResourceTable } from '../components/ResourceTable';
 import { GraphFilters } from '../components/GraphFilters';
 import { ExportPanel } from '../components/ExportPanel';
+import DOMPurify from 'dompurify';
 import type { ScoredResource, RiskCategory } from '../api/types';
+
+/**
+ * Simple markdown to HTML renderer for AI summaries.
+ * Handles headings, bold, lists, horizontal rules, and paragraphs.
+ */
+function renderMarkdown(md: string): string {
+  const html = md
+    .replace(/^### (.+)$/gm, '<h4>$1</h4>')
+    .replace(/^## (.+)$/gm, '<h3 style="margin-top:1.25rem;margin-bottom:0.5rem;font-size:1rem;">$1</h3>')
+    .replace(/^# (.+)$/gm, '<h2 style="margin-top:1.5rem;margin-bottom:0.5rem;font-size:1.125rem;">$1</h2>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/^---$/gm, '<hr style="border:none;border-top:1px solid var(--color-border, #334155);margin:1rem 0;">')
+    .replace(/^\d+\.\s+(.+)$/gm, '<li style="margin-left:1.5rem;list-style:decimal;">$1</li>')
+    .replace(/^[-*]\s+(.+)$/gm, '<li style="margin-left:1.5rem;list-style:disc;">$1</li>')
+    .replace(/\n{2,}/g, '</p><p style="margin:0.75rem 0;">')
+    .replace(/\n/g, '<br>');
+  return DOMPurify.sanitize(`<p style="margin:0.75rem 0;">${html}</p>`);
+}
 
 /** Risk card configuration for the summary section. */
 const RISK_CARD_CONFIG: { key: keyof Pick<NonNullable<AnalysisResult['riskSummary']>, 'critical' | 'high' | 'medium' | 'low'>; label: string; category: RiskCategory; color: string }[] = [
@@ -157,7 +176,15 @@ export function AnalysisDetailPage() {
       {result.naturalLanguageSummary && (
         <div className="risk-summary" style={{ marginTop: '0', marginBottom: '2rem' }}>
           <h2>AI Summary</h2>
-          <p>{result.naturalLanguageSummary}</p>
+          <div
+            className="markdown-content"
+            style={{
+              fontSize: '0.875rem',
+              lineHeight: '1.7',
+              color: 'var(--color-text, #f1f5f9)',
+            }}
+            dangerouslySetInnerHTML={{ __html: renderMarkdown(result.naturalLanguageSummary) }}
+          />
         </div>
       )}
 

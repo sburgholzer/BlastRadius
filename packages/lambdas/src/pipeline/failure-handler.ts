@@ -210,7 +210,7 @@ export async function handler(
   event: FailureHandlerInput,
   deps?: FailureHandlerDeps,
 ): Promise<FailureHandlerResult> {
-  const { s3Client, docClient } = deps ?? createDefaultDeps();
+  const { s3Client, docClient } = deps && 's3Client' in deps ? deps : createDefaultDeps();
 
   // Validate required input fields
   if (!event || typeof event !== 'object') {

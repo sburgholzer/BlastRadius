@@ -26,10 +26,16 @@ jobs:
           npm run build --workspace=packages/cli
 
       - name: Bundle CLI
-        run: npx esbuild packages/cli/src/index.ts --bundle --platform=node --target=node20 --outfile=blast-radius.js --banner:js='#!/usr/bin/env node' --external:child_process --external:fs --external:path --external:crypto
+        run: npx esbuild packages/cli/src/index.ts --bundle --platform=node --target=node20 --outfile=blast-radius.js --external:child_process --external:fs --external:path --external:crypto
+
+      - name: Add shebang
+        run: |
+          echo '#!/usr/bin/env node' | cat - blast-radius.js > temp && mv temp blast-radius.js
 
       - name: Verify bundle works
-        run: node blast-radius.js help || true
+        run: |
+          chmod +x blast-radius.js
+          ./blast-radius.js help || true
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2

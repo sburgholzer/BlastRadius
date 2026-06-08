@@ -1,0 +1,227 @@
+name: PR Check
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  # ─── Determine what changed ─────────────────────────────────────────
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      core: ${{ steps.filter.outputs.core }}
+      lambdas: ${{ steps.filter.outputs.lambdas }}
+      cli: ${{ steps.filter.outputs.cli }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+      infra: ${{ steps.filter.outputs.infra }}
+      root: ${{ steps.filter.outputs.root }}
+      docs_only: ${{ steps.filter.outputs.docs_only }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            core:
+              - 'packages/core/**'
+            lambdas:
+              - 'packages/lambdas/**'
+            cli:
+              - 'packages/cli/**'
+            frontend:
+              - 'packages/frontend/**'
+            infra:
+              - 'packages/infra/**'
+            root:
+              - 'package.json'
+              - 'package-lock.json'
+              - 'tsconfig.json'
+              - 'vitest.config.ts'
+              - '.eslintrc.json'
+            docs_only:
+              - 'docs/**'
+              - 'examples/**'
+              - '.kiro/**'
+              - '**/*.md'
+
+  # ─── Build & Test ───────────────────────────────────────────────────
+  build-test:
+    needs: changes
+    if: needs.changes.outputs.core == 'true' || needs.changes.outputs.lambdas == 'true' || needs.changes.outputs.cli == 'true' || needs.changes.outputs.frontend == 'true' || needs.changes.outputs.infra == 'true' || needs.changes.outputs.root == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build core
+        if: needs.changes.outputs.core == 'true' || needs.changes.outputs.root == 'true'
+        run: npm run build --workspace=packages/core
+
+      - name: Build lambdas
+        if: needs.changes.outputs.core == 'true' || needs.changes.outputs.lambdas == 'true' || needs.changes.outputs.root == 'true'
+        run: npm run build --workspace=packages/lambdas
+
+      - name: Build CLI
+        if: needs.changes.outputs.core == 'true' || needs.changes.outputs.cli == 'true' || needs.changes.outputs.root == 'true'
+        run: npm run build --workspace=packages/cli
+
+      - name: Build frontend
+        if: needs.changes.outputs.core == 'true' || needs.changes.outputs.frontend == 'true' || needs.changes.outputs.root == 'true'
+        run: npm run build --workspace=packages/frontend
+
+      - name: Build infra
+        if: needs.changes.outputs.core == 'true' || needs.changes.outputs.lambdas == 'true' || needs.changes.outputs.infra == 'true' || needs.changes.outputs.root == 'true'
+        run: npm run build --workspace=packages/infra
+
+      - name: CDK synth validation
+        if: needs.changes.outputs.core == 'true' || needs.changes.outputs.lambdas == 'true' || needs.changes.outputs.infra == 'true' || needs.changes.outputs.root == 'true'
+        working-directory: packages/infra
+        run: npx cdk synth --quiet
+
+      - name: Run tests
+        id: tests
+        run: |
+          npx vitest run --reporter=verbose 2>&1 | tee test-output.txt
+          echo "exit_code=$?" >> $GITHUB_OUTPUT
+        continue-on-error: true
+
+      - name: Comment test results
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const output = fs.readFileSync('test-output.txt', 'utf8');
+
+            const summaryMatch = output.match(/Tests\s+.*$/m);
+            const summary = summaryMatch ? summaryMatch[0] : 'Could not parse test results';
+
+            const passed = !output.includes('FAIL');
+            const icon = passed ? '✅' : '❌';
+
+            const body = [
+              `## ${icon} Test Results`,
+              '',
+              `\`\`\``,
+              summary,
+              `\`\`\``,
+              '',
+              passed ? 'All tests passed.' : '⚠️ Some tests failed. See workflow logs for details.',
+            ].join('\n');
+
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            const existing = comments.find(c => c.body.includes('Test Results'));
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }
+
+      - name: Fail if tests failed
+        if: steps.tests.outputs.exit_code != '0'
+        run: exit 1
+
+  # ─── Lint ───────────────────────────────────────────────────────────
+  lint:
+    needs: changes
+    if: needs.changes.outputs.core == 'true' || needs.changes.outputs.lambdas == 'true' || needs.changes.outputs.cli == 'true' || needs.changes.outputs.frontend == 'true' || needs.changes.outputs.infra == 'true' || needs.changes.outputs.root == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - run: npm ci
+
+      - name: Lint
+        id: lint
+        run: npm run lint 2>&1 | tee lint-output.txt
+        continue-on-error: true
+
+      - name: Format check
+        id: format
+        run: npm run format:check 2>&1 | tee format-output.txt
+        continue-on-error: true
+
+      - name: Comment lint results
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const lintOutput = fs.readFileSync('lint-output.txt', 'utf8');
+            const formatOutput = fs.readFileSync('format-output.txt', 'utf8');
+
+            const lintPassed = '${{ steps.lint.outcome }}' === 'success';
+            const formatPassed = '${{ steps.format.outcome }}' === 'success';
+            const allPassed = lintPassed && formatPassed;
+            const icon = allPassed ? '✅' : '⚠️';
+
+            const sections = [`## ${icon} Lint & Format`];
+
+            if (lintPassed) {
+              sections.push('', '**ESLint:** Passed ✓');
+            } else {
+              const errorLines = lintOutput.split('\n').filter(l => l.includes('error') || l.includes('warning')).slice(0, 10);
+              sections.push('', '**ESLint:** Issues found', '', '```', ...errorLines, '```');
+            }
+
+            if (formatPassed) {
+              sections.push('', '**Prettier:** Passed ✓');
+            } else {
+              sections.push('', '**Prettier:** Formatting issues found. Run `npm run format` to fix.');
+            }
+
+            const body = sections.join('\n');
+
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            const existing = comments.find(c => c.body.includes('Lint & Format'));
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }
+
+      - name: Fail if lint or format failed
+        if: steps.lint.outcome == 'failure' || steps.format.outcome == 'failure'
+        run: exit 1

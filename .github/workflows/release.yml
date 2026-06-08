@@ -1,0 +1,52 @@
+name: Release CLI
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build packages
+        run: |
+          npm run build --workspace=packages/core
+          npm run build --workspace=packages/cli
+
+      - name: Bundle CLI
+        run: npx esbuild packages/cli/src/index.ts --bundle --platform=node --target=node20 --outfile=blast-radius.js --banner:js='#!/usr/bin/env node' --external:child_process --external:fs --external:path --external:crypto
+
+      - name: Verify bundle works
+        run: node blast-radius.js help || true
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: blast-radius.js
+          generate_release_notes: true
+          body: |
+            ## Installation
+
+            Download and run with Node.js 20+:
+            ```bash
+            curl -sL https://github.com/sburgholzer/BlastRadius/releases/download/${{ github.ref_name }}/blast-radius.js -o blast-radius.js
+            chmod +x blast-radius.js
+            ./blast-radius.js analyze --format cdk --stack MyStack --ai-gate
+            ```
+
+            Or use directly:
+            ```bash
+            node blast-radius.js analyze --format terraform-plan --input plan.json --threshold 75 --ci
+            ```

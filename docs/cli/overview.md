@@ -136,43 +136,74 @@ With `--ci`, output is JSON containing everything needed for PR comments and gat
 
 ## CI/CD Integration Examples
 
-**GitHub Actions:**
+### GitHub Action (recommended)
+
+The easiest way — use the published action directly:
+
 ```yaml
-- name: Blast Radius Check
+- uses: sburgholzer/BlastRadius@v0.1.0
   id: blast-radius
-  run: |
-    blast-radius analyze --format cdk --stack ${{ env.STACK_NAME }} --threshold 75 --ai-gate --ci > blast-radius.json
-  env:
-    BLAST_RADIUS_API_URL: ${{ secrets.BLAST_RADIUS_URL }}
+  with:
+    format: cdk
+    stack: ${{ env.STACK_NAME }}
+    threshold: 75
+    ai-gate: true
+    api-url: ${{ secrets.BLAST_RADIUS_URL }}
 
 - name: Comment PR
   if: always() && github.event_name == 'pull_request'
   uses: actions/github-script@v7
   with:
     script: |
-      const fs = require('fs');
-      const result = JSON.parse(fs.readFileSync('blast-radius.json', 'utf8'));
-      const verdict = result.verdict === 'pass' ? '✅ PASS' : '❌ FAIL';
-      const reason = result.reason === 'ai-gate' ? ' (AI recommendation)' : '';
+      const verdict = '${{ steps.blast-radius.outputs.verdict }}' === 'pass' ? '✅' : '❌';
       github.rest.issues.createComment({
         owner: context.repo.owner,
         repo: context.repo.repo,
         issue_number: context.issue.number,
-        body: `## 🎯 Blast Radius — ${verdict}${reason}\n\n${result.naturalLanguageSummary || ''}`
+        body: `## 🎯 Blast Radius — ${verdict}\n\n**Score:** ${{ steps.blast-radius.outputs.highest-score }}/100 | **Affected:** ${{ steps.blast-radius.outputs.total-affected }}\n\n${{ steps.blast-radius.outputs.summary }}`
       });
+```
+
+**Action outputs:**
+| Output | Description |
+|--------|-------------|
+| `analysis-id` | The analysis ID |
+| `verdict` | `pass` or `fail` |
+| `highest-score` | Highest impact score (0-100) |
+| `total-affected` | Total affected resources |
+| `recommend-deploy` | AI recommendation (`true`/`false`) |
+| `confidence` | AI confidence (`high`/`medium`/`low`) |
+| `summary` | AI-generated markdown summary |
+| `result-json` | Full JSON result |
+
+### CLI directly (any CI system)
+
+Download the bundled CLI from the GitHub release:
+
+**GitHub Actions:**
+```yaml
+- run: |
+    curl -sL https://github.com/sburgholzer/BlastRadius/releases/latest/download/blast-radius.js -o blast-radius.js
+    node blast-radius.js analyze --format cdk --stack $STACK_NAME --ai-gate --ci
+  env:
+    BLAST_RADIUS_API_URL: ${{ secrets.BLAST_RADIUS_URL }}
 ```
 
 **GitLab CI:**
 ```yaml
 blast-radius:
   script:
-    - blast-radius analyze --format terraform-plan --ai-gate --ci
+    - curl -sL https://github.com/sburgholzer/BlastRadius/releases/latest/download/blast-radius.js -o blast-radius.js
+    - node blast-radius.js analyze --format terraform-plan --ai-gate --ci
 ```
 
 **Jenkins:**
 ```groovy
 stage('Blast Radius') {
-  sh 'blast-radius analyze --format cdk --stack MyStack --threshold 75 --ai-gate --ci'
+  sh '''
+    curl -sL https://github.com/sburgholzer/BlastRadius/releases/latest/download/blast-radius.js -o blast-radius.js
+    node blast-radius.js analyze --format cdk --stack MyStack --threshold 75 --ai-gate --ci
+  '''
 }
 ```
 

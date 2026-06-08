@@ -7,6 +7,8 @@ Analyze the blast radius of AWS infrastructure changes before deployment. Discov
 
 ## Quick Start — GitHub Action
 
+> **⚠️ Requires a Blast Radius backend deployed to your AWS account.** The CLI and Action submit analyses to your backend API. See [Deploy Your Own Backend](#deploy-your-own-backend) for setup (one `cdk deploy` command).
+
 Add to any repo's workflow:
 
 ```yaml

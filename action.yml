@@ -1,5 +1,5 @@
 name: 'Blast Radius - AWS Infrastructure Risk Analysis'
-description: 'Analyze AWS infrastructure changes (CDK, CloudFormation, Terraform) for blast radius risk before deployment. Discovers downstream dependencies via AWS Config, scores impact, and provides AI-powered deployment recommendations.'
+description: 'Analyze AWS infrastructure changes (CDK, CloudFormation, Terraform) for blast radius risk before deployment.'
 author: 'sburgholzer'
 
 branding:

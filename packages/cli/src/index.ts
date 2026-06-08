@@ -26,15 +26,23 @@ import { handleCdkDiff } from './cdk-diff.js';
 import type { CdkDiffOptions } from './cdk-diff.js';
 import { handleGenerate } from './generate.js';
 import type { GenerateOptions } from './generate.js';
+import { autoGenerate } from './input-generators.js';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 export interface AnalyzeOptions {
   format?: string;
   input?: string;
+  stack?: string;
+  app?: string;
+  template?: string;
+  region?: string;
+  profile?: string;
+  save?: string;
   threshold?: number;
   ci?: boolean;
   enableSummary?: boolean;
+  aiGate?: boolean;
 }
 
 export interface StatusOptions {
@@ -121,30 +129,63 @@ export async function handleAnalyze(
   apiClient: ApiClient,
   inputData?: string
 ): Promise<CliOutput> {
-  // Read input from file or stdin
-  let payload: string;
-  try {
-    payload = inputData ?? (await readInput(options.input));
-  } catch (err) {
-    const message =
-      err instanceof Error ? err.message : 'Failed to read input';
-    return formatError(message, options.ci);
-  }
+  let parsedPayload: unknown;
 
-  if (!payload || payload.trim() === '') {
+  if (options.input || inputData) {
+    // Read from file or stdin
+    let payload: string;
+    try {
+      payload = inputData ?? (await readInput(options.input));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to read input';
+      return formatError(message, options.ci);
+    }
+
+    if (!payload || payload.trim() === '') {
+      return formatError('No input provided. Use --input <file> or pipe via stdin.', options.ci);
+    }
+
+    try {
+      parsedPayload = JSON.parse(payload);
+    } catch {
+      return formatError('Invalid JSON input. Could not parse input data.', options.ci);
+    }
+  } else if (options.format && options.format !== 'canonical') {
+    // Auto-generate based on format
+    if (!options.ci) {
+      process.stderr.write(`Generating ${options.format} input...\n`);
+    }
+    try {
+      parsedPayload = autoGenerate({
+        format: options.format,
+        stack: options.stack,
+        app: options.app,
+        template: options.template,
+        region: options.region,
+        profile: options.profile,
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Input generation failed';
+      return formatError(message, options.ci);
+    }
+  } else {
     return formatError(
-      'No input provided. Use --input <file> or pipe data via stdin.',
-      options.ci
+      'Provide --input <file>, pipe via stdin, or use --format with generation options (--stack, --template, etc).',
+      options.ci,
     );
   }
 
-  // Parse input JSON
-  let parsedPayload: unknown;
-  try {
-    parsedPayload = JSON.parse(payload);
-  } catch {
-    return formatError('Invalid JSON input. Could not parse input data.', options.ci);
+  // Save generated payload if --save specified
+  if (options.save) {
+    const { writeFileSync } = await import('node:fs');
+    writeFileSync(options.save, JSON.stringify(parsedPayload, null, 2) + '\n');
+    if (!options.ci) {
+      process.stderr.write(`Saved input to ${options.save}\n`);
+    }
   }
+
+  // Determine the API format (CDK generates a CFN changeset)
+  const apiFormat = options.format === 'cdk' ? 'cloudformation' : (options.format || 'canonical');
 
   // Validate threshold if provided
   if (options.threshold !== undefined) {
@@ -155,26 +196,121 @@ export async function handleAnalyze(
   }
 
   // Submit analysis
+  if (!options.ci) {
+    process.stderr.write('Submitting analysis...\n');
+  }
+
   let result: AnalysisResult;
   try {
-    result = await apiClient.submitAnalysis(parsedPayload, options);
+    const submitResponse = await apiClient.submitAnalysis(parsedPayload, { ...options, format: apiFormat });
+
+    // If we got full results back (synchronous), use them directly
+    if (submitResponse.riskSummary || submitResponse.scoredResources) {
+      result = submitResponse;
+    } else {
+      // Async pipeline — poll for completion
+      const analysisId = submitResponse.analysisId;
+      if (!options.ci) {
+        process.stderr.write(`Analysis ${analysisId} submitted. Waiting for results...\n`);
+      }
+
+      const maxWait = 90_000;
+      const pollInterval = 3_000;
+      const start = Date.now();
+      let finalStatus = 'running';
+      let lastUpdatedAt = '';
+      let staleCount = 0;
+
+      while (Date.now() - start < maxWait) {
+        await new Promise((resolve) => setTimeout(resolve, pollInterval));
+        const status = await apiClient.getStatus(analysisId);
+        finalStatus = status.status;
+        if (status.status === 'completed' || status.status === 'failed') break;
+
+        const updatedAt = (status as unknown as { updatedAt?: string }).updatedAt ?? '';
+        if (updatedAt && updatedAt === lastUpdatedAt) {
+          staleCount++;
+          if (staleCount >= 5) { finalStatus = 'failed'; break; }
+        } else {
+          staleCount = 0;
+          lastUpdatedAt = updatedAt;
+        }
+      }
+
+      if (finalStatus === 'failed') {
+        return formatError(`Analysis ${analysisId} failed.`, options.ci);
+      }
+      if (finalStatus === 'running') {
+        return formatError(`Analysis ${analysisId} timed out. Check: blast-radius status --analysis-id ${analysisId}`, options.ci);
+      }
+
+      // Fetch results
+      try {
+        result = await apiClient.getExport(analysisId, 'json');
+      } catch {
+        try {
+          result = await apiClient.getStatus(analysisId) as unknown as AnalysisResult;
+        } catch {
+          return { exitCode: 0, output: `Analysis completed: ${analysisId}` };
+        }
+      }
+    }
   } catch (err) {
-    const message =
-      err instanceof Error ? err.message : 'Analysis request failed';
+    const message = err instanceof Error ? err.message : 'Analysis request failed';
     return formatError(message, options.ci);
   }
 
-  // If threshold is provided, evaluate verdict
-  if (options.threshold !== undefined) {
+  // Evaluate gates
+  const aiRecommendation = (result as unknown as { recommendDeploy?: boolean }).recommendDeploy;
+  const aiConfidence = (result as unknown as { confidence?: string }).confidence;
+  const aiGateFailed = options.aiGate && aiRecommendation === false;
+
+  if (options.threshold !== undefined && result.scoredResources) {
     const verdict = evaluateThreshold(result.scoredResources, options.threshold);
-    return formatVerdict(verdict, options.ci);
+
+    if (options.ci) {
+      const ciOutput = {
+        ...verdict,
+        analysisId: result.analysisId,
+        ...(result.naturalLanguageSummary ? { naturalLanguageSummary: result.naturalLanguageSummary } : {}),
+        ...(result.riskSummary ? { riskSummary: result.riskSummary } : {}),
+        ...(aiRecommendation !== undefined ? { recommendDeploy: aiRecommendation } : {}),
+        ...(aiConfidence ? { confidence: aiConfidence } : {}),
+        ...(aiGateFailed ? { verdict: 'fail', exitCode: 1, reason: 'ai-gate' } : {}),
+      };
+      return { exitCode: aiGateFailed ? 1 : verdict.exitCode, output: JSON.stringify(ciOutput, null, 2) };
+    }
+
+    if (aiGateFailed) {
+      return {
+        exitCode: 1,
+        output: `✗ FAIL — AI recommends against deployment.\n  Confidence: ${aiConfidence ?? 'unknown'}\n\n${result.naturalLanguageSummary ?? ''}`,
+      };
+    }
+
+    return formatVerdict(verdict, false);
   }
 
-  // No threshold: return full results
+  // No threshold — check AI gate alone
   if (options.ci) {
     return {
-      exitCode: 0,
-      output: JSON.stringify(result, null, 2),
+      exitCode: aiGateFailed ? 1 : 0,
+      output: JSON.stringify({
+        analysisId: result.analysisId,
+        status: result.status,
+        riskSummary: result.riskSummary,
+        ...(result.naturalLanguageSummary ? { naturalLanguageSummary: result.naturalLanguageSummary } : {}),
+        ...(aiRecommendation !== undefined ? { recommendDeploy: aiRecommendation } : {}),
+        ...(aiConfidence ? { confidence: aiConfidence } : {}),
+        ...(aiGateFailed ? { verdict: 'fail', reason: 'ai-gate' } : { verdict: 'pass' }),
+      }, null, 2),
+    };
+  }
+
+  if (aiGateFailed) {
+    return {
+      exitCode: 1,
+      output: `✗ FAIL — AI recommends against deployment.\n  Confidence: ${aiConfidence ?? 'unknown'}\n\n${result.naturalLanguageSummary ?? ''}`,
     };
   }
 
@@ -440,10 +576,18 @@ export async function main(
       const options: AnalyzeOptions = {
         format: typeof flags.format === 'string' ? flags.format : undefined,
         input: typeof flags.input === 'string' ? flags.input : undefined,
+        stack: typeof flags.stack === 'string' ? flags.stack : undefined,
+        app: typeof flags.app === 'string' ? flags.app : undefined,
+        template: typeof flags.template === 'string' ? flags.template : undefined,
+        region: typeof flags.region === 'string' ? flags.region : undefined,
+        profile: typeof flags.profile === 'string' ? flags.profile : undefined,
+        save: typeof flags.save === 'string' ? flags.save : undefined,
         threshold:
           typeof flags.threshold === 'string'
             ? Number(flags.threshold)
             : undefined,
+        enableSummary: flags['no-summary'] === true ? false : true,
+        aiGate: flags['ai-gate'] === true,
         ci,
       };
       return handleAnalyze(options, client, inputData);
@@ -471,19 +615,23 @@ export async function main(
     }
 
     case 'cdk-diff': {
-      const cdkOptions: CdkDiffOptions = {
+      // Alias: cdk-diff is shorthand for analyze --format cdk
+      const cdkOptions: AnalyzeOptions = {
+        format: 'cdk',
         stack: typeof flags.stack === 'string' ? flags.stack : '',
         app: typeof flags.app === 'string' ? flags.app : undefined,
         region: typeof flags.region === 'string' ? flags.region : undefined,
         profile: typeof flags.profile === 'string' ? flags.profile : undefined,
+        save: typeof flags.save === 'string' ? flags.save : undefined,
         threshold:
           typeof flags.threshold === 'string'
             ? Number(flags.threshold)
             : undefined,
-        summary: flags['no-summary'] === true ? false : true,
+        enableSummary: flags['no-summary'] === true ? false : true,
+        aiGate: flags['ai-gate'] === true,
         ci,
       };
-      return handleCdkDiff(cdkOptions, client);
+      return handleAnalyze(cdkOptions, client);
     }
 
     case 'generate': {
@@ -506,18 +654,29 @@ export async function main(
           `Unknown command: "${command}"`,
           '',
           'Usage:',
-          '  blast-radius analyze [--format <format>] [--input <file>] [--threshold <0-100>] [--ci]',
-          '  blast-radius cdk-diff --stack <name> [--app <cmd>] [--threshold <0-100>] [--ci]',
-          '  blast-radius generate --format <format> --output <file> [--stack <name>] [--input <file>]',
+          '  blast-radius analyze --format <format> [options]',
+          '  blast-radius generate --format <format> --output <file> [options]',
           '  blast-radius status --analysis-id <id>',
           '  blast-radius export --analysis-id <id> [--format json|pdf]',
           '',
-          'Formats: canonical, cloudformation, terraform-plan, cdk',
+          'Analyze options:',
+          '  --format <format>     Format: cdk, cloudformation, terraform-plan, canonical',
+          '  --input <file>        Input file (skip auto-generation)',
+          '  --stack <name>        Stack name (CDK/CloudFormation auto-generation)',
+          '  --app <command>       CDK app command (optional)',
+          '  --template <file>     CloudFormation template file',
+          '  --threshold <0-100>   Risk score threshold for pass/fail',
+          '  --ai-gate             Fail if AI recommends against deployment',
+          '  --no-summary          Skip AI summary generation',
+          '  --save <file>         Save generated input to file before submitting',
+          '  --ci                  Machine-readable JSON output',
+          '  --region <region>     AWS region',
+          '  --profile <profile>   AWS profile',
           '',
           'Exit codes:',
-          '  0 = pass (no resource exceeds threshold)',
-          '  1 = fail (resources exceed threshold)',
-          '  2 = error (analysis failure or invalid input)',
+          '  0 = pass',
+          '  1 = fail (threshold exceeded or AI gate triggered)',
+          '  2 = error',
         ].join('\n'),
         ci
       );

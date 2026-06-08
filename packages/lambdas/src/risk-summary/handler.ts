@@ -34,6 +34,10 @@ export interface SummaryInput {
 export interface SummaryOutput {
   /** The generated natural language summary (max 500 words), or undefined if skipped/failed. */
   summary?: string;
+  /** Whether the AI recommends proceeding with deployment. */
+  recommendDeploy?: boolean;
+  /** Confidence level of the deploy recommendation. */
+  confidence?: 'high' | 'medium' | 'low';
   /** Duration of the generation call in milliseconds. */
   generationDurationMs: number;
   /** Whether the summary was skipped due to feature flag being disabled. */
@@ -85,12 +89,22 @@ export function buildPrompt(
     .join('\n\n');
 
   return (
-    `You are a cloud infrastructure risk analyst. Generate a concise, plain-English summary ` +
-    `of the blast radius analysis results below. The summary must not exceed 500 words.\n\n` +
-    `For each high-risk resource, describe:\n` +
-    `- The affected service and why it is at risk\n` +
-    `- The reason for the risk (dependency chain, criticality)\n` +
-    `- A suggested mitigation action\n\n` +
+    `You are a cloud infrastructure risk analyst. Analyze the blast radius results below and respond with a JSON object containing exactly these fields:\n\n` +
+    `{\n` +
+    `  "summary": "<markdown-formatted analysis, max 500 words>",\n` +
+    `  "recommendDeploy": <true or false>,\n` +
+    `  "confidence": "<high, medium, or low>"\n` +
+    `}\n\n` +
+    `For the summary field, write in markdown with:\n` +
+    `- An executive overview of the risk level\n` +
+    `- For each high-risk resource: the affected service, why it's at risk, and a mitigation action\n` +
+    `- A clear deployment recommendation with reasoning\n` +
+    `- Prioritized next steps\n\n` +
+    `For recommendDeploy: set to false if there are critical risks, single points of failure, ` +
+    `cascading dependency chains, or patterns that indicate the change could cause outages. ` +
+    `Set to true if the risks are manageable and well-understood.\n\n` +
+    `For confidence: "high" if the data clearly supports the recommendation, ` +
+    `"medium" if there are unknowns, "low" if the analysis is incomplete.\n\n` +
     `Overall Risk Summary:\n` +
     `- Total affected resources: ${riskSummary.totalAffected}\n` +
     `- Critical: ${riskSummary.critical}, High: ${riskSummary.high}, ` +
@@ -98,8 +112,7 @@ export function buildPrompt(
     `- Highest impact score: ${riskSummary.highestScore}/100\n\n` +
     `Top ${topResources.length} Highest-Risk Resources:\n\n` +
     `${resourceDescriptions}\n\n` +
-    `Provide the summary in plain language suitable for a team lead reviewing a deployment. ` +
-    `Focus on actionable insights and keep it under 500 words.`
+    `Respond ONLY with the JSON object, no other text.`
   );
 }
 
@@ -234,6 +247,25 @@ export async function handler(input: SummaryInput): Promise<SummaryOutput> {
       };
     }
 
+    // Parse structured JSON response from Bedrock
+    let recommendDeploy: boolean | undefined;
+    let confidence: 'high' | 'medium' | 'low' | undefined;
+    let parsedSummary = summary;
+
+    try {
+      // Try to parse as JSON (the model should return structured output)
+      const jsonMatch = summary.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        const parsed = JSON.parse(jsonMatch[0]);
+        if (parsed.summary) parsedSummary = enforceWordLimit(parsed.summary);
+        if (typeof parsed.recommendDeploy === 'boolean') recommendDeploy = parsed.recommendDeploy;
+        if (parsed.confidence) confidence = parsed.confidence;
+      }
+    } catch {
+      // If JSON parsing fails, use the raw text as summary (graceful fallback)
+      parsedSummary = summary;
+    }
+
     // Store summary in S3 alongside the visualization result
     if (input.analysisId) {
       try {
@@ -244,7 +276,9 @@ export async function handler(input: SummaryInput): Promise<SummaryOutput> {
         // Read existing visualization result and add the summary
         const existing = await s3Client.send(new GetObjectCommand({ Bucket: bucket, Key: vizKey }));
         const vizData = JSON.parse(await existing.Body?.transformToString() ?? '{}');
-        vizData.naturalLanguageSummary = summary;
+        vizData.naturalLanguageSummary = parsedSummary;
+        vizData.recommendDeploy = recommendDeploy;
+        vizData.confidence = confidence;
 
         await s3Client.send(new PutObjectCommand({
           Bucket: bucket,
@@ -258,7 +292,9 @@ export async function handler(input: SummaryInput): Promise<SummaryOutput> {
     }
 
     return {
-      summary,
+      summary: parsedSummary,
+      recommendDeploy,
+      confidence,
       generationDurationMs: Date.now() - startTime,
       skipped: false,
     };

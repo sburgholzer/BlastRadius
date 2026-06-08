@@ -39,6 +39,8 @@ export interface CdkDiffOptions {
   threshold?: number;
   /** Enable AI summary generation. Default: true */
   summary?: boolean;
+  /** Fail if AI recommends against deployment */
+  aiGate?: boolean;
   /** Machine-readable output */
   ci?: boolean;
 }
@@ -382,33 +384,76 @@ export async function handleCdkDiff(
   if (options.threshold !== undefined && result.scoredResources) {
     const verdict = evaluateThreshold(result.scoredResources, options.threshold);
 
+    // Check AI gate — if AI recommends against deploy, override to fail
+    const aiRecommendation = (result as unknown as { recommendDeploy?: boolean; confidence?: string }).recommendDeploy;
+    const aiConfidence = (result as unknown as { confidence?: string }).confidence;
+    const aiGateFailed = options.aiGate && aiRecommendation === false;
+
     if (options.ci) {
-      // Include summary in CI output alongside the verdict
       const ciOutput = {
         ...verdict,
         analysisId: result.analysisId,
         ...(result.naturalLanguageSummary ? { naturalLanguageSummary: result.naturalLanguageSummary } : {}),
         ...(result.riskSummary ? { riskSummary: result.riskSummary } : {}),
+        ...(aiRecommendation !== undefined ? { recommendDeploy: aiRecommendation } : {}),
+        ...(aiConfidence ? { confidence: aiConfidence } : {}),
+        ...(aiGateFailed ? { verdict: 'fail', exitCode: 1, reason: 'ai-gate' } : {}),
       };
       return {
-        exitCode: verdict.exitCode,
+        exitCode: aiGateFailed ? 1 : verdict.exitCode,
         output: JSON.stringify(ciOutput, null, 2),
+      };
+    }
+
+    if (aiGateFailed) {
+      return {
+        exitCode: 1,
+        output: [
+          '✗ FAIL — AI recommends against deployment.',
+          `  Confidence: ${aiConfidence ?? 'unknown'}`,
+          `  Total affected: ${result.riskSummary?.totalAffected ?? 0}`,
+          `  Highest score: ${result.riskSummary?.highestScore ?? 0}`,
+          '',
+          result.naturalLanguageSummary ?? '',
+        ].join('\n'),
       };
     }
 
     return formatVerdict(verdict, false);
   }
 
+  // No threshold — check AI gate alone
+  const aiRecommendation = (result as unknown as { recommendDeploy?: boolean; confidence?: string }).recommendDeploy;
+  const aiConfidence = (result as unknown as { confidence?: string }).confidence;
+  const aiGateFailed = options.aiGate && aiRecommendation === false;
+
   if (options.ci) {
     return {
-      exitCode: 0,
+      exitCode: aiGateFailed ? 1 : 0,
       output: JSON.stringify({
         analysisId: result.analysisId,
         status: result.status,
         riskSummary: result.riskSummary,
         ...(result.naturalLanguageSummary ? { naturalLanguageSummary: result.naturalLanguageSummary } : {}),
+        ...(aiRecommendation !== undefined ? { recommendDeploy: aiRecommendation } : {}),
+        ...(aiConfidence ? { confidence: aiConfidence } : {}),
+        ...(aiGateFailed ? { verdict: 'fail', reason: 'ai-gate' } : { verdict: 'pass' }),
         scoredResources: result.scoredResources,
       }, null, 2),
+    };
+  }
+
+  if (aiGateFailed) {
+    return {
+      exitCode: 1,
+      output: [
+        '✗ FAIL — AI recommends against deployment.',
+        `  Confidence: ${aiConfidence ?? 'unknown'}`,
+        `  Total affected: ${result.riskSummary?.totalAffected ?? 0}`,
+        `  Highest score: ${result.riskSummary?.highestScore ?? 0}`,
+        '',
+        result.naturalLanguageSummary ?? '',
+      ].join('\n'),
     };
   }
 

@@ -140,7 +140,7 @@ describe('handleAnalyze', () => {
     const client = createMockApiClient();
     const result = await handleAnalyze({ ci: false }, client, '');
     expect(result.exitCode).toBe(2);
-    expect(result.output).toContain('No input provided');
+    expect(result.output).toContain('--input');
   });
 
   it('returns error for invalid JSON input', async () => {

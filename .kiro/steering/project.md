@@ -129,16 +129,27 @@ type ValidationResult =
 - Pipeline failures: all task states catch States.ALL → UpdateStatusFailed (marks "failed" in DynamoDB) → PipelineFailed (Fail state)
 - API handler maps visualization format (nodes/edges) to frontend format (scoredResources/dependencyGraph), filters orphan nodes and dangling edges
 - Risk summary Lambda writes the generated summary back to S3 visualization.json
+- Risk summary returns structured JSON: `{ summary, recommendDeploy, confidence }` — parsed from Bedrock response
 - Risk summary checks both `ENABLE_BEDROCK_SUMMARY` and `ENABLE_BEDROCK` env vars, uses inference profile model ID
 
 ## CLI
 
-- Five commands: `analyze`, `cdk-diff`, `generate`, `status`, `export`
-- `cdk-diff` synthesizes CDK, creates/describes/deletes a read-only changeset, submits for analysis, polls with stale detection
-- `generate` produces input files for testing/demos from CDK, CloudFormation, or Terraform
-- Polling stale detection: if `updatedAt` unchanged for 5 polls (~15s), assumes failure
-- CI output includes: `analysisId`, `riskSummary`, `naturalLanguageSummary`, `verdict`
-- `enableSummary` sent in API request options (defaults to true, disabled with `--no-summary`)
+- One program, one main command: `blast-radius analyze --format <format> [options]`
+- Supported formats: `cdk`, `cloudformation`, `terraform-plan`, `canonical`
+- Auto-generates input when no `--input` provided:
+  - CDK: runs `cdk synth` + creates CloudFormation changeset (`--stack` required)
+  - CloudFormation: creates changeset from template (`--stack` + `--template` required)
+  - Terraform: runs `terraform plan` + `terraform show -json` (no extra args needed)
+  - Canonical: always requires `--input`
+- Two deployment gates:
+  - `--threshold <0-100>` — numeric score-based gate
+  - `--ai-gate` — judgment-based gate using AI's `recommendDeploy` field
+  - Can be combined: fails if EITHER triggers
+- `--save <file>` writes generated input to disk before submitting
+- `generate` command produces files without submitting (for testing/demos)
+- `cdk-diff` kept as alias for `analyze --format cdk`
+- Polling with stale detection (5 unchanged polls = assumed failure)
+- CI output includes: `analysisId`, `riskSummary`, `naturalLanguageSummary`, `verdict`, `recommendDeploy`, `confidence`
 
 ## Documentation
 

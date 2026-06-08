@@ -2,219 +2,192 @@
 
 # CLI (packages/cli)
 
-Command-line tool for CI/CD pipeline integration. Wraps the REST API and adds CDK-specific workflows for generating changesets automatically.
+A single program for CI/CD pipeline integration. Auto-generates changesets/plans for each IaC tool, submits for analysis, polls for results, and evaluates deployment gates.
 
-**The mental model:** It's like the frontend but for robots. Instead of a visual graph, it outputs JSON. Instead of clicking buttons, it uses exit codes (0 = proceed, 1 = stop, 2 = broken).
-
-**Five commands:**
 ```bash
-# "Should I deploy this?" — the main use case
-blast-radius analyze --format terraform-plan --input plan.json --threshold 75 --ci
+blast-radius analyze --format <format> [options]
+```
 
-# CDK-specific: synth + changeset + analyze in one step
-blast-radius cdk-diff --stack MyStack --threshold 75 --ci
+## Supported Formats
 
-# Generate example input files for testing/demos
+| Format | Auto-generates? | Requirements |
+|--------|----------------|--------------|
+| `cdk` | ✅ | `--stack` (runs `cdk synth` + creates CloudFormation changeset) |
+| `cloudformation` | ✅ | `--stack` + `--template` (creates changeset from template) |
+| `terraform-plan` | ✅ | None — runs `terraform plan` + `terraform show -json` in cwd |
+| `canonical` | ❌ | `--input` required (already in final format) |
+
+If `--input` is provided, auto-generation is skipped for any format.
+
+## Commands
+
+### `analyze` — Submit and evaluate
+
+The main command. Generates input (if needed), submits to the API, polls for results, evaluates gates.
+
+```bash
+# CDK — auto-generates changeset
+blast-radius analyze --format cdk --stack MyStack --ai-gate
+
+# CloudFormation — creates changeset from template
+blast-radius analyze --format cloudformation --stack MyStack --template cfn.json --threshold 75
+
+# Terraform — auto-runs terraform plan
+blast-radius analyze --format terraform-plan --ai-gate --ci
+
+# Pre-built file (any format)
+blast-radius analyze --format terraform-plan --input plan.json --threshold 80
+
+# Save generated input + submit
+blast-radius analyze --format cdk --stack MyStack --save changeset.json --ai-gate
+```
+
+**All options:**
+
+| Flag | Description |
+|------|-------------|
+| `--format <format>` | Input format: `cdk`, `cloudformation`, `terraform-plan`, `canonical` |
+| `--input <file>` | Input file (skips auto-generation) |
+| `--stack <name>` | Stack name (CDK/CloudFormation) |
+| `--app <command>` | CDK app command (optional, reads `cdk.json` if omitted) |
+| `--template <file>` | CloudFormation template file |
+| `--threshold <0-100>` | Risk score threshold for pass/fail |
+| `--ai-gate` | Fail if AI recommends against deployment |
+| `--no-summary` | Skip AI summary generation |
+| `--save <file>` | Save generated input to file before submitting |
+| `--ci` | Machine-readable JSON output |
+| `--region <region>` | AWS region |
+| `--profile <profile>` | AWS profile |
+
+### `generate` — Create input files only
+
+Produces input files for testing, demos, or later use with `analyze --input`. Does not submit.
+
+```bash
 blast-radius generate --format cdk --stack MyStack --output changeset.json
+blast-radius generate --format terraform-plan --output plan.json
+blast-radius generate --format cloudformation --stack MyStack --template cfn.json --output changeset.json
+```
 
-# "Is my analysis done yet?"
+### `status` — Check running analysis
+
+```bash
 blast-radius status --analysis-id abc-123
+```
 
-# "Give me the full results"
+### `export` — Fetch completed results
+
+```bash
 blast-radius export --analysis-id abc-123 --format json
 ```
 
-## The `analyze` command
+### `cdk-diff` — Alias
 
-The generic entry point. Reads a pre-built changeset file and submits it to the API.
+Shorthand for `analyze --format cdk`. Kept for backward compatibility.
 
-**Flow:**
-1. Read input (from `--input` file path or stdin pipe)
-2. Parse as JSON (fail with exit 2 if invalid)
-3. Validate threshold if provided (fail with exit 2 if outside 0-100)
-4. POST to the API → get back full analysis results
-5. If `--threshold` was set → evaluate pass/fail verdict
-6. Output results (JSON in `--ci` mode, human-readable otherwise)
-7. Exit with appropriate code
-
-**Options:**
-- `--format <format>` — Input format: `canonical`, `cloudformation`, `terraform-plan`, `cdk`
-- `--input <path>` — File path (or pipe via stdin)
-- `--threshold <0-100>` — Risk threshold for pass/fail verdict
-- `--ci` — Machine-readable JSON output
-- `--no-summary` — Disables AI summary generation
-- `--region`, `--profile` — AWS config overrides
-
-**Input flexibility:**
 ```bash
-terraform show -json plan.out | blast-radius analyze --format terraform-plan --threshold 75 --ci
-cat changeset.json | blast-radius analyze --format cloudformation --ci
-blast-radius analyze --input my-manifest.json --format canonical
+blast-radius cdk-diff --stack MyStack --ai-gate
+# Equivalent to: blast-radius analyze --format cdk --stack MyStack --ai-gate
 ```
 
-**CI output includes:** `analysisId`, `riskSummary`, `naturalLanguageSummary`, `verdict` (when `--threshold` used).
+## Deployment Gates
 
-## The `cdk-diff` command
+Two independent gates that can be used separately or together:
 
-CDK-specific workflow that automates the entire changeset generation process. No pre-built files needed — just point it at a stack.
+**Threshold gate (`--threshold`):** Numeric score-based. Fails if any resource's impact score exceeds the threshold. Deterministic, fast, no AI needed.
 
-**Flow:**
-1. Run `cdk synth` to produce the CloudFormation template (uses `--app` or reads `cdk.json`)
-2. Create a read-only CloudFormation changeset against the deployed stack
-3. Poll until the changeset is ready
-4. Describe the changeset (structured JSON with Actions, Replacements, etc.)
-5. Delete the changeset (never executed)
-6. Submit to the API as `format: "cloudformation"` with `enableSummary` option
-7. Poll for results with stale detection
+**AI gate (`--ai-gate`):** Judgment-based. The AI analyzes cascading risks, single points of failure, and dependency patterns. Returns `recommendDeploy: true/false` with a confidence level (`high`, `medium`, `low`).
 
-**Options:**
-- `--stack <name>` — (required) CloudFormation stack name to diff against
-- `--app <command>` — CDK app command (optional, reads `cdk.json` if omitted)
-- `--threshold <0-100>` — Risk threshold for pass/fail verdict
-- `--no-summary` — Disables AI summary generation
-- `--ci` — Machine-readable JSON output
-- `--region`, `--profile` — AWS config overrides
-
-**Usage:**
 ```bash
-# From within a CDK project directory (reads cdk.json):
-blast-radius cdk-diff --stack BlastRadiusDemoBaseline
+# Threshold only
+blast-radius analyze --format cdk --stack MyStack --threshold 75
 
-# Or specify the CDK app command explicitly:
-blast-radius cdk-diff --stack BlastRadiusDemoBaseline --app "npx ts-node lib/app.ts"
+# AI gate only
+blast-radius analyze --format cdk --stack MyStack --ai-gate
 
-# CI mode with threshold:
-blast-radius cdk-diff --stack BlastRadiusDemoBaseline --threshold 75 --ci
-
-# Disable AI summary:
-blast-radius cdk-diff --stack MyStack --no-summary
-
-# With AWS profile/region:
-blast-radius cdk-diff --stack MyStack --profile prod --region eu-west-1
-```
-
-**Why this approach?** CDK doesn't produce a machine-readable diff natively. The `cdk diff` command outputs human-readable text. But CloudFormation's `CreateChangeSet` + `DescribeChangeSet` gives us structured JSON with exact actions, replacement info, and cascading dependencies — which is exactly what the CloudFormation adapter expects.
-
-## The `generate` command
-
-Produces input files in native format for testing, demos, or feeding into the `analyze` command later.
-
-**Usage:**
-```bash
-# Generate a CloudFormation changeset from a CDK project:
-blast-radius generate --format cdk --stack MyStack --output changeset.json
-
-# Copy/validate a Terraform plan:
-blast-radius generate --format terraform-plan --input plan.json --output example.json
-
-# Copy/validate a CloudFormation changeset:
-blast-radius generate --format cloudformation --input changeset.json --output example.json
-```
-
-**Output:**
-```
-✓ Saved to changeset.json
-  Format: cloudformation (from CDK)
-  Changes: 7 resource(s)
-  Size: 6.2 KB
-
-Use with:
-  blast-radius analyze --format cloudformation --input changeset.json
-```
-
-## Polling and Stale Detection
-
-After submitting an analysis, the CLI polls for results every 3 seconds. It includes stale detection: if the `updatedAt` timestamp remains unchanged for 5 consecutive polls (~15 seconds), the CLI assumes the pipeline has silently failed and reports a failure.
-
-**Failure modes:**
-- Pipeline reports `status: "failed"` → exit code 2, prints error details
-- Stale detection triggers → exit code 2, prints "Analysis appears stuck"
-- Poll timeout (configurable, default 120s) → exit code 2, prints timeout message
-
-## The `status` command
-
-Quick check on a running analysis:
-```bash
-blast-radius status --analysis-id abc-123
-# → Running (Stage: Scoring, Progress: 60%)
-```
-
-## The `export` command
-
-Fetch full results for a completed analysis:
-```bash
-blast-radius export --analysis-id abc-123 --format json > results.json
-```
-
-## Output modes
-
-Human-readable (default):
-```
-✓ PASS - No resources exceed the risk threshold.
-  Total affected resources: 12
-  Highest impact score: 68
-  AI Summary: The proposed changes affect 3 critical resources...
-```
-
-Machine-readable (`--ci` flag):
-```json
-{
-  "analysisId": "abc-123",
-  "verdict": "pass",
-  "exitCode": 0,
-  "riskSummary": { "totalAffected": 12, "highestScore": 68, "criticalCount": 2 },
-  "naturalLanguageSummary": "The proposed changes affect..."
-}
+# Both — fails if EITHER triggers
+blast-radius analyze --format cdk --stack MyStack --threshold 75 --ai-gate
 ```
 
 ## Exit Codes
 
 | Code | Meaning |
 |------|---------|
-| 0 | Analysis complete, threshold passed (or no threshold) |
-| 1 | Analysis complete, threshold exceeded (verdict: fail) |
+| 0 | Pass — threshold OK and AI approves (or gates not enabled) |
+| 1 | Fail — threshold exceeded OR AI recommends against deployment |
 | 2 | Error — invalid input, pipeline failure, timeout |
+
+## CI/CD Output
+
+With `--ci`, output is JSON containing everything needed for PR comments and gate decisions:
+
+```json
+{
+  "analysisId": "abc-123",
+  "verdict": "fail",
+  "exitCode": 1,
+  "reason": "ai-gate",
+  "recommendDeploy": false,
+  "confidence": "high",
+  "riskSummary": { "highestScore": 65, "totalAffected": 10, "critical": 0, "high": 10 },
+  "naturalLanguageSummary": "## Executive Overview\n\nThis deployment presents..."
+}
+```
 
 ## CI/CD Integration Examples
 
 **GitHub Actions:**
 ```yaml
 - name: Blast Radius Check
+  id: blast-radius
   run: |
-    blast-radius cdk-diff --stack ${{ env.STACK_NAME }} --threshold 75 --ci
+    blast-radius analyze --format cdk --stack ${{ env.STACK_NAME }} --threshold 75 --ai-gate --ci > blast-radius.json
   env:
     BLAST_RADIUS_API_URL: ${{ secrets.BLAST_RADIUS_URL }}
-    AWS_REGION: us-east-1
+
+- name: Comment PR
+  if: always() && github.event_name == 'pull_request'
+  uses: actions/github-script@v7
+  with:
+    script: |
+      const fs = require('fs');
+      const result = JSON.parse(fs.readFileSync('blast-radius.json', 'utf8'));
+      const verdict = result.verdict === 'pass' ? '✅ PASS' : '❌ FAIL';
+      const reason = result.reason === 'ai-gate' ? ' (AI recommendation)' : '';
+      github.rest.issues.createComment({
+        owner: context.repo.owner,
+        repo: context.repo.repo,
+        issue_number: context.issue.number,
+        body: `## 🎯 Blast Radius — ${verdict}${reason}\n\n${result.naturalLanguageSummary || ''}`
+      });
 ```
 
 **GitLab CI:**
 ```yaml
 blast-radius:
   script:
-    - blast-radius analyze --format terraform-plan --input plan.json --threshold 80 --ci
-  allow_failure:
-    exit_codes: [1]  # threshold exceeded = warning, not blocker
+    - blast-radius analyze --format terraform-plan --ai-gate --ci
 ```
+
+**Jenkins:**
+```groovy
+stage('Blast Radius') {
+  sh 'blast-radius analyze --format cdk --stack MyStack --threshold 75 --ai-gate --ci'
+}
+```
+
+## Polling and Stale Detection
+
+After submitting, the CLI polls every 3 seconds (up to 120s). Includes stale detection: if `updatedAt` is unchanged for 5 consecutive polls (~15s), assumes silent failure and reports error.
 
 ## Architecture
 
-**Three source files:**
-- `src/index.ts` — Main entry point, argument parsing, `analyze`/`status`/`export` commands
-- `src/cdk-diff.ts` — CDK-specific changeset generation and async polling
-- `src/generate.ts` — File generation for testing/demos
+**Source files:**
+- `src/index.ts` — Main entry, argument parsing, `analyze`/`status`/`export` commands, polling logic
+- `src/input-generators.ts` — Auto-generation for CDK, CloudFormation, Terraform
+- `src/cdk-diff.ts` — Legacy CDK-specific handler (kept for reference)
+- `src/generate.ts` — File generation without submission
 
-**The `ApiClient` interface — why it matters for testing:**
-```typescript
-interface ApiClient {
-  submitAnalysis(payload, options): Promise<AnalysisResult>;
-  getStatus(analysisId): Promise<AnalysisStatus>;
-  getExport(analysisId, format): Promise<AnalysisResult>;
-}
-```
-In production, makes HTTP calls to the real API. In tests, inject a mock that returns fake data. The CLI's 37 tests run instantly with zero network calls.
-
-**API request options:** The CLI sends `enableSummary: true` by default in the options payload (unless `--no-summary` is specified). This controls whether the pipeline runs the SummaryGeneration step.
-
-**No AWS SDK dependency:** The `cdk-diff` and `generate` commands shell out to the AWS CLI for CloudFormation operations. This keeps the package lightweight and avoids bundling the SDK.
+**No AWS SDK dependency:** Shells out to AWS CLI and CDK/Terraform CLIs for generation. Keeps the package lightweight.
 
 **Environment:** Needs `BLAST_RADIUS_API_URL` set to the API Gateway endpoint URL.

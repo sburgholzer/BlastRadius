@@ -286,6 +286,8 @@ async function handleGetAnalysis(analysisId: string): Promise<APIGatewayProxyRes
           scoredResources,
           dependencyGraph,
           ...(vizResult.naturalLanguageSummary ? { naturalLanguageSummary: vizResult.naturalLanguageSummary } : {}),
+          ...(vizResult.recommendDeploy !== undefined ? { recommendDeploy: vizResult.recommendDeploy } : {}),
+          ...(vizResult.confidence ? { confidence: vizResult.confidence } : {}),
         });
       }
     } catch {

@@ -8,11 +8,27 @@
 1. Checks feature flag (`ENABLE_BEDROCK_SUMMARY` or `ENABLE_BEDROCK` env var)
 2. If disabled → returns `{ skipped: true }`, pipeline continues
 3. Selects the top 3 highest-scoring resources
-4. Builds a prompt with resource details and risk summary
+4. Builds a structured prompt requesting JSON output with summary + deploy recommendation
 5. Invokes Bedrock (Claude Haiku 4.5 via inference profile)
-6. Enforces 500-word limit on the response
-7. **Writes the summary back to S3** — reads the existing `visualization.json`, appends `naturalLanguageSummary`, writes it back
-8. Returns `{ summary, generationDurationMs, skipped: false }`
+6. Parses the JSON response: `{ summary, recommendDeploy, confidence }`
+7. Enforces 500-word limit on the summary text
+8. **Writes summary + recommendation back to S3** — reads `visualization.json`, appends fields, writes back
+9. Returns `{ summary, recommendDeploy, confidence, generationDurationMs, skipped: false }`
+
+**Structured output from Bedrock:**
+```json
+{
+  "summary": "# Cloud Infrastructure Blast Radius...\n\n## Recommendation...",
+  "recommendDeploy": false,
+  "confidence": "high"
+}
+```
+
+- `recommendDeploy: false` — AI identified critical risks (cascading failures, single points of failure, systemic patterns)
+- `recommendDeploy: true` — risks are manageable and well-understood
+- `confidence`: "high" (data clearly supports recommendation), "medium" (some unknowns), "low" (incomplete analysis)
+
+The CLI's `--ai-gate` flag uses `recommendDeploy` to fail the pipeline (exit code 1) when the AI recommends against deployment — even if the numeric threshold passes.
 
 **Input from the pipeline:**
 ```typescript

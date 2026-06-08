@@ -34,62 +34,43 @@ Both `01-baseline` and `02-risky-change` include `cdk.json` for easy synthesis �
 
 ## Step 2: Run Blast Radius Analysis
 
-The easiest way — use the `cdk-diff` CLI command from the risky-change directory:
+From the risky-change directory:
 
 ```bash
 cd ../02-risky-change
 npm install
-BLAST_RADIUS_API_URL=<your-api-url> blast-radius cdk-diff --stack BlastRadiusDemoBaseline
+BLAST_RADIUS_API_URL=<your-api-url> blast-radius analyze --format cdk --stack BlastRadiusDemoBaseline --ai-gate
 ```
 
 This automatically:
-1. Synthesizes the CDK app (reads `cdk.json` for the app command)
+1. Synthesizes the CDK app (reads `cdk.json`)
 2. Creates a read-only CloudFormation changeset against the deployed stack
-3. Polls until the changeset is ready
-4. Describes the changeset to get structured change data
-5. Deletes the changeset (never executed)
-6. Submits to Blast Radius for analysis
-7. Polls for results with stale detection
+3. Describes the changeset to get structured change data
+4. Deletes the changeset (never executed)
+5. Submits to Blast Radius for analysis
+6. Polls for results
+7. Evaluates AI gate (pass/fail)
 
-### With CI mode and threshold:
+### CI mode with both gates:
 
 ```bash
-BLAST_RADIUS_API_URL=<your-api-url> blast-radius cdk-diff \
-  --stack BlastRadiusDemoBaseline \
-  --threshold 75 \
-  --ci
-```
-
-Output:
-```json
-{
-  "analysisId": "abc-123",
-  "verdict": "fail",
-  "exitCode": 1,
-  "riskSummary": { "totalAffected": 7, "highestScore": 89, "criticalCount": 2 },
-  "naturalLanguageSummary": "The proposed security group restriction cuts off public access..."
-}
+blast-radius analyze --format cdk --stack BlastRadiusDemoBaseline --threshold 75 --ai-gate --ci
 ```
 
 ### Alternative: Generate + Analyze workflow
 
-If you prefer to see the intermediate steps or save the changeset for later:
+Save the changeset for inspection or later use:
 
 ```bash
-# Generate the changeset from the CDK project:
+# Generate only (no submission):
 blast-radius generate --format cdk --stack BlastRadiusDemoBaseline --output changeset.json
 
-# Inspect it:
-cat changeset.json | jq '.Changes | length'
-# → 7
-
-# Submit it:
-blast-radius analyze --format cloudformation --input changeset.json --threshold 75 --ci
+# Submit separately:
+blast-radius analyze --format cloudformation --input changeset.json --threshold 75 --ai-gate
 ```
 
-### Alternative: Text diff only
+### Text diff only (no analysis):
 
-To just see what CDK would change (human-readable text diff, no analysis):
 ```bash
 npx cdk diff
 ```

@@ -96,7 +96,7 @@ Two independent gates that can be used separately or together:
 
 **Threshold gate (`--threshold`):** Numeric score-based. Fails if any resource's impact score exceeds the threshold. Deterministic, fast, no AI needed.
 
-**AI gate (`--ai-gate`):** Judgment-based. The AI analyzes cascading risks, single points of failure, and dependency patterns. Returns `recommendDeploy: true/false` with a confidence level (`high`, `medium`, `low`).
+**AI gate (`--ai-gate`):** Judgment-based. The AI analyzes cascading risks, single points of failure, and dependency patterns. Returns `recommendDeploy: true/false` with a confidence level (`high`, `medium`, `low`). Note: `--ai-gate` forces AI summary generation even if `--no-summary` is specified (the gate requires it). If the server has Bedrock disabled (`enableBedrockSummary: false` in CDK stack props), the CLI exits with error code 2 explaining the misconfiguration.
 
 ```bash
 # Threshold only

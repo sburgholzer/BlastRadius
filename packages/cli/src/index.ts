@@ -195,6 +195,11 @@ export async function handleAnalyze(
     }
   }
 
+  // Warn if --ai-gate overrides --no-summary
+  if (options.aiGate && options.enableSummary === false && !options.ci) {
+    process.stderr.write('Note: --ai-gate requires AI summary. Ignoring --no-summary.\n');
+  }
+
   // Submit analysis
   if (!options.ci) {
     process.stderr.write('Submitting analysis...\n');
@@ -202,7 +207,12 @@ export async function handleAnalyze(
 
   let result: AnalysisResult;
   try {
-    const submitResponse = await apiClient.submitAnalysis(parsedPayload, { ...options, format: apiFormat });
+    const submitResponse = await apiClient.submitAnalysis(parsedPayload, {
+      ...options,
+      format: apiFormat,
+      // AI gate requires summary to be enabled (it needs recommendDeploy from Bedrock)
+      enableSummary: options.aiGate ? true : (options.enableSummary ?? true),
+    });
 
     // If we got full results back (synchronous), use them directly
     if (submitResponse.riskSummary || submitResponse.scoredResources) {
@@ -264,6 +274,15 @@ export async function handleAnalyze(
   const aiRecommendation = (result as unknown as { recommendDeploy?: boolean }).recommendDeploy;
   const aiConfidence = (result as unknown as { confidence?: string }).confidence;
   const aiGateFailed = options.aiGate && aiRecommendation === false;
+
+  // If --ai-gate was requested but the AI didn't produce a recommendation, fail with error
+  if (options.aiGate && aiRecommendation === undefined) {
+    return formatError(
+      'AI gate requested but no deployment recommendation was generated. ' +
+      'The Bedrock summary may be disabled on the server (enableBedrockSummary: false in CDK stack props).',
+      options.ci,
+    );
+  }
 
   if (options.threshold !== undefined && result.scoredResources) {
     const verdict = evaluateThreshold(result.scoredResources, options.threshold);

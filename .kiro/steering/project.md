@@ -143,7 +143,7 @@ type ValidationResult =
   - Canonical: always requires `--input`
 - Two deployment gates:
   - `--threshold <0-100>` — numeric score-based gate
-  - `--ai-gate` — judgment-based gate using AI's `recommendDeploy` field
+  - `--ai-gate` — judgment-based gate using AI's `recommendDeploy` field (forces summary on even if `--no-summary` set; errors if Bedrock is disabled server-side)
   - Can be combined: fails if EITHER triggers
 - `--save <file>` writes generated input to disk before submitting
 - `generate` command produces files without submitting (for testing/demos)

@@ -3,7 +3,7 @@ description: 'Analyze IaC changes (CDK, CloudFormation, Terraform) for blast rad
 author: 'sburgholzer'
 
 branding:
-  icon: 'shield'
+  icon: 'target'
   color: 'orange'
 
 inputs:

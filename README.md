@@ -1,363 +1,194 @@
-# Blast Radius Pre-Deploy Visualizer
+# 🎯 Blast Radius — AWS Infrastructure Risk Analysis
 
-Analyze infrastructure-as-code changesets before deployment to identify, score, and visualize downstream resource dependencies at risk. Shift the discovery of unintended impact from post-deploy incidents to pre-deploy review.
+Analyze the blast radius of AWS infrastructure changes before deployment. Discovers downstream dependencies via AWS Config, scores impact, and provides AI-powered deployment recommendations.
 
-## Overview
+[![GitHub Action](https://img.shields.io/badge/GitHub%20Action-Marketplace-blue?logo=github)](https://github.com/marketplace/actions/blast-radius-aws-infrastructure-risk-analysis)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE.md)
 
-The Blast Radius Visualizer is a serverless system that accepts changesets from any IaC tool (CloudFormation, CDK, Terraform, Pulumi), discovers downstream resource dependencies via AWS Config and Resource Explorer, computes risk scores, and presents an interactive dependency graph with filtering, export, and CI/CD integration.
+## Quick Start — GitHub Action
 
-```mermaid
-graph TB
-    subgraph "Ingestion Layer"
-        API[API Gateway REST API]
-        CLI[CLI Tool]
-        CLI --> API
-        API --> AR[Adapter Registry Lambda]
-        AR --> CFA[CloudFormation Adapter]
-        AR --> TFA[Terraform Adapter]
-        AR --> CDKA[CDK Adapter]
-        CFA --> MIS[Manifest Ingestion Service]
-        TFA --> MIS
-        CDKA --> MIS
-        API --> MIS
-    end
+Add to any repo's workflow:
 
-    subgraph "Orchestration Layer"
-        MIS --> SF[Step Functions State Machine]
-        SF --> RR[Resource Resolver Lambda]
-        SF --> RA[Risk Assessor Lambda]
-        SF --> VP[Visualization Prep Lambda]
-        SF --> RSG[Risk Summary Generator]
-    end
-
-    subgraph "Data Sources"
-        RR --> AC[AWS Config]
-        RR --> RE[Resource Explorer]
-    end
-
-    subgraph "Storage & Presentation"
-        SF --> S3[S3 Results Bucket]
-        CF[CloudFront] --> FE[React Frontend]
-    end
+```yaml
+- uses: sburgholzer/BlastRadius@v0.1.0
+  id: blast-radius
+  with:
+    format: cdk                              # or: cloudformation, terraform-plan
+    stack: MyProductionStack                 # required for cdk/cloudformation
+    threshold: 75                            # fail if score exceeds this
+    ai-gate: true                            # fail if AI says don't deploy
+    api-url: ${{ secrets.BLAST_RADIUS_URL }}
 ```
 
-## Key Features
+**Outputs:** `verdict`, `highest-score`, `total-affected`, `recommend-deploy`, `confidence`, `summary`
 
-- **IaC-tool-agnostic** — Canonical manifest format with adapter plugins for CloudFormation, Terraform, CDK, and Pulumi
-- **Automated dependency discovery** — Queries AWS Config and Resource Explorer for resource relationships up to configurable depth
-- **Risk scoring** — Impact scores (0-100) based on dependency depth, resource criticality, and change type severity
-- **Interactive visualization** — Cytoscape.js-powered graph with zoom, pan, node selection, and risk-based color coding
-- **CI/CD integration** — REST API + CLI tool with pass/fail verdicts based on configurable risk thresholds
-- **Natural language summaries** — Optional Amazon Bedrock integration for plain-English risk explanations
-- **Multi-tenancy** — IAM-based access scoping ensures teams only see resources they're authorized to access
+### Post AI Summary as PR Comment
+
+```yaml
+- name: Comment PR
+  if: always() && github.event_name == 'pull_request'
+  uses: actions/github-script@v7
+  with:
+    script: |
+      const verdict = '${{ steps.blast-radius.outputs.verdict }}' === 'pass' ? '✅ PASS' : '❌ FAIL';
+      github.rest.issues.createComment({
+        owner: context.repo.owner,
+        repo: context.repo.repo,
+        issue_number: context.issue.number,
+        body: `## 🎯 Blast Radius — ${verdict}\n\n**Score:** ${{ steps.blast-radius.outputs.highest-score }}/100 | **Affected:** ${{ steps.blast-radius.outputs.total-affected }} | **Deploy:** ${{ steps.blast-radius.outputs.recommend-deploy }} (${{ steps.blast-radius.outputs.confidence }})\n\n${{ steps.blast-radius.outputs.summary }}`
+      });
+```
+
+## Quick Start — CLI
+
+```bash
+# Download
+curl -sL https://github.com/sburgholzer/BlastRadius/releases/latest/download/blast-radius.js -o blast-radius.js
+chmod +x blast-radius.js
+
+# CDK — auto-generates changeset
+BLAST_RADIUS_API_URL=<your-url> ./blast-radius.js analyze --format cdk --stack MyStack --ai-gate
+
+# Terraform — auto-runs terraform plan
+BLAST_RADIUS_API_URL=<your-url> ./blast-radius.js analyze --format terraform-plan --threshold 75
+
+# CloudFormation — from template
+BLAST_RADIUS_API_URL=<your-url> ./blast-radius.js analyze --format cloudformation --stack MyStack --template cfn.json
+```
+
+**Exit codes:** `0` = pass, `1` = fail (threshold or AI gate), `2` = error
+
+## How It Works
+
+```
+Your IaC change
+  → Auto-generates changeset (CDK synth, terraform plan, etc.)
+  → Adapter converts to canonical format
+  → AWS Config discovers downstream dependencies
+  → Risk Assessor scores each affected resource
+  → AI analyzes patterns and recommends deploy/no-deploy
+  → Results displayed in CLI, PR comment, or interactive frontend
+```
+
+## Features
+
+| Feature | Description |
+|---------|-------------|
+| **Multi-format** | CDK, CloudFormation, Terraform (auto-generates changesets) |
+| **Dependency discovery** | AWS Config + Resource Explorer for real relationship data |
+| **Risk scoring** | Impact 0-100 based on depth, criticality, and change severity |
+| **AI deployment gate** | Claude-powered recommendation with confidence level |
+| **Threshold gate** | Numeric score threshold for deterministic pass/fail |
+| **Interactive frontend** | Cytoscape.js graph with filtering, zoom, export |
+| **CI/CD native** | GitHub Action + JSON output for any CI system |
+
+## Deployment Gates
+
+Two independent gates — use one or both:
+
+```bash
+# Threshold only (deterministic, fast)
+blast-radius analyze --format cdk --stack MyStack --threshold 75
+
+# AI gate only (judgment-based, catches patterns)
+blast-radius analyze --format cdk --stack MyStack --ai-gate
+
+# Both — fails if EITHER triggers
+blast-radius analyze --format cdk --stack MyStack --threshold 75 --ai-gate
+```
+
+The AI gate catches things thresholds can't — like 10 resources all depending on a single security group (score 65, but systemic risk). The AI sees the pattern and says "don't deploy."
+
+## Architecture
+
+```
+API Gateway → Step Functions Pipeline:
+  → Adapter Conversion (conditional)
+  → Ingestion & Validation
+  → Resource Resolver (AWS Config queries)
+  → Risk Assessor (scoring formula)
+  → Visualization Prep (S3 storage)
+  → AI Summary (Bedrock, conditional)
+  → Complete
+```
+
+**Stack:** TypeScript, AWS CDK, Lambda (Node.js 22), Step Functions, DynamoDB, S3, CloudFront, Bedrock
+
+## Deploy Your Own Backend
+
+### Prerequisites
+
+- AWS account with [Config](https://docs.aws.amazon.com/config/latest/developerguide/), [Resource Explorer](https://docs.aws.amazon.com/resource-explorer/), and [CDK Bootstrap](https://docs.aws.amazon.com/cdk/v2/guide/bootstrapping.html) enabled
+- Node.js 20+
+- Optional: [Bedrock model access](https://docs.aws.amazon.com/bedrock/latest/userguide/model-access.html) for AI summaries
+
+### Deploy
+
+```bash
+git clone https://github.com/sburgholzer/BlastRadius.git
+cd BlastRadius
+npm install
+npm run build
+cd packages/infra
+cdk deploy
+```
+
+### Configuration
+
+```typescript
+new BlastRadiusStack(app, 'BlastRadiusStack', {
+  enableBedrockSummary: true,   // AI summaries (requires Bedrock access)
+  resultsRetentionDays: 90,     // S3 lifecycle
+  enableAuth: false,            // true = IAM SigV4, false = open (demos)
+});
+```
 
 ## Project Structure
 
 ```
-blast-radius-visualizer/
+├── action.yml              # GitHub Action definition
 ├── packages/
-│   ├── core/          # Data models, validation (zod), cache, retry, verdict, auth
-│   ├── lambdas/       # Lambda handlers (ingestion, adapters, resolver, assessor, etc.)
-│   ├── frontend/      # React SPA with Cytoscape.js graph visualization
-│   ├── cli/           # CLI tool for CI/CD pipeline integration
-│   └── infra/         # AWS CDK infrastructure stack
-├── package.json       # Root workspace configuration
-├── tsconfig.json      # TypeScript project references
-├── vitest.config.ts   # Test runner configuration
-└── .eslintrc.json     # Linting rules
+│   ├── core/               # Shared models, validation, scoring
+│   ├── lambdas/            # Lambda handlers (adapters, resolver, assessor, etc.)
+│   ├── frontend/           # React SPA with Cytoscape.js
+│   ├── cli/                # CLI tool (bundled as single file for releases)
+│   └── infra/              # CDK infrastructure stack
+├── examples/
+│   ├── cdk-demo/           # Two-step CDK demo (baseline + risky change)
+│   └── mock-server/        # Local mock for frontend development
+└── docs/                   # Architecture walkthrough and API docs
 ```
-
-### Package Details
-
-| Package | Description | Key Dependencies | Docs |
-|---------|-------------|-----------------|------|
-| `@blast-radius/core` | Shared data models, schema validation, LRU cache, retry logic, verdict evaluator, access scoping | `zod` | [README](packages/core/README.md) |
-| `@blast-radius/lambdas` | 10+ Lambda handlers for the analysis pipeline | `@aws-sdk/*`, `@blast-radius/core` | [README](packages/lambdas/README.md) |
-| `@blast-radius/frontend` | React SPA with interactive dependency graph | `react`, `cytoscape`, `react-router-dom` | [README](packages/frontend/README.md) |
-| `@blast-radius/cli` | CLI wrapper for CI/CD integration | `@blast-radius/core` | [README](packages/cli/README.md) |
-| `@blast-radius/infra` | CDK stack defining all AWS infrastructure | `aws-cdk-lib`, `constructs` | [README](packages/infra/README.md) |
-
-## Getting Started
-
-### Prerequisites
-
-- Node.js 20+
-- npm 9+
-- AWS CDK CLI (`npm install -g aws-cdk`)
-- AWS account with the following enabled (for deployment):
-
-#### AWS Config (Required)
-
-The Resource Resolver queries AWS Config for resource relationships. Config must be recording the resource types you want to analyze.
-
-```bash
-# Check current status
-aws configservice describe-configuration-recorders
-
-# Enable recording for all resource types
-aws configservice put-configuration-recorder \
-  --configuration-recorder '{"name":"default","roleARN":"arn:aws:iam::ACCOUNT_ID:role/aws-service-role/config.amazonaws.com/AWSServiceRoleForConfig","recordingGroup":{"allSupported":true,"includeGlobalResourceTypes":true}}'
-```
-
-#### AWS Config Aggregator (Required)
-
-Advanced Queries require an aggregator, even for single-account setups.
-
-```bash
-# Check if one exists
-aws configservice describe-configuration-aggregators
-
-# Create one if empty
-aws configservice put-configuration-aggregator \
-  --configuration-aggregator-name blast-radius-aggregator \
-  --account-aggregation-sources '[{"AccountIds":["ACCOUNT_ID"],"AllAwsRegions":true}]'
-```
-
-#### Resource Explorer (Required)
-
-Used for cross-account and cross-region dependency discovery.
-
-```bash
-# Check status
-aws resource-explorer-2 get-index
-
-# Enable if not active
-aws resource-explorer-2 create-index --type LOCAL
-```
-
-#### CDK Bootstrap (Required)
-
-```bash
-npx cdk bootstrap aws://ACCOUNT_ID/REGION
-```
-
-#### Amazon Bedrock (Optional — for AI summaries)
-
-If you want natural language risk summaries, enable Claude 4.5 Haiku access in the Bedrock console (Settings → Model access). Check availability:
-
-```bash
-aws bedrock get-foundation-model-availability --model-id anthropic.claude-haiku-4-5-20251001-v1:0
-```
-
-The `authorizationStatus` should be `AUTHORIZED`. If not, request access in the AWS Console under Amazon Bedrock → Model access.
-
-### Installation
-
-```bash
-git clone <repository-url>
-cd BlastRadius
-npm install
-```
-
-### Build
-
-```bash
-# Build all packages
-npm run build
-
-# Build a specific package
-npm run build --workspace=packages/core
-```
-
-### Run Tests
-
-```bash
-# Run all tests (349 tests across 29 files)
-npm test
-
-# Run tests in watch mode
-npm run test:watch
-
-# Run tests for a specific package
-npx vitest run packages/core
-```
-
-### Lint & Format
-
-```bash
-npm run lint
-npm run format
-npm run format:check
-```
-
-## Usage
-
-### CLI
-
-```bash
-# Analyze a Terraform plan
-blast-radius analyze --format terraform-plan --input plan.json --threshold 75
-
-# Analyze a CloudFormation changeset from stdin
-cat changeset.json | blast-radius analyze --format cloudformation --ci
-
-# Check analysis status
-blast-radius status --analysis-id <id>
-
-# Export results
-blast-radius export --analysis-id <id> --format json
-```
-
-**Exit codes:**
-- `0` — Pass (no resource exceeds threshold)
-- `1` — Fail (resources exceed threshold)
-- `2` — Error (invalid input, timeout, or analysis failure)
-
-### REST API
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/analyze` | Submit a manifest or native changeset, starts the pipeline |
-| GET | `/analyze/{analysisId}` | Get analysis status and results |
-| GET | `/analyze/{analysisId}/export` | Export results as JSON or PDF |
-| GET | `/formats` | List supported adapter formats |
-| GET | `/analyses` | List all analyses |
-
-All routes are handled by a single API Lambda that bridges HTTP requests to the Step Functions pipeline and DynamoDB/S3. Authentication is configurable (IAM SigV4 for production, open for demos).
-
-### Frontend
-
-The React frontend is served via CloudFront and provides:
-- Interactive dependency graph with zoom, pan, and node selection
-- Color-coded nodes: Critical (red), High (orange), Medium (yellow), Low (green)
-- Dynamic node sizing based on impact score
-- Hover highlighting (dims unconnected nodes to trace paths)
-- Multiple layout options (Auto, Hierarchical, Force, Circle, Grid)
-- Animated edge flow showing dependency direction
-- Floating legend explaining colors and sizes
-- Clickable risk summary cards that filter the view
-- Filter by risk category, resource type, and source IaC tool
-- Sortable tabular view with expandable rows (click for full ARN + dependency chain)
-- JSON and PDF export (real PDF with jsPDF)
-- Real-time progress polling during analysis
-- Dark/light mode toggle (persists to localStorage)
 
 ## Risk Scoring
-
-Each affected resource receives an Impact Score (0-100):
 
 ```
 Impact_Score = (depthScore × 0.30) + (criticalityScore × 0.40) + (changeTypeSeverity × 0.30)
 ```
 
-| Component | Formula |
-|-----------|---------|
-| Depth Score | `max(10, 100 - ((depth - 1) × 10))` |
-| Criticality | Critical=100, High=75, Medium=50, Low=25 |
-| Change Type | Remove=100, Replace=80, Modify=50, Add=30 |
+| Category | Score Range |
+|----------|-------------|
+| Critical | 75-100 |
+| High | 50-74 |
+| Medium | 25-49 |
+| Low | 0-24 |
 
-**Risk Categories:**
-- Critical: 75-100
-- High: 50-74
-- Medium: 25-49
-- Low: 0-24
+## Documentation
 
-## Infrastructure Deployment
+- [Architecture Walkthrough](docs/architecture-walkthrough.md)
+- [CLI Reference](docs/cli/overview.md)
+- [Infrastructure](docs/infra/overview.md)
+- [Frontend](docs/frontend/overview.md)
+- [CDK Demo](examples/cdk-demo/README.md)
 
-```bash
-# Build all packages
-npm run build
-
-# Deploy the stack
-cd packages/infra
-npx cdk deploy --require-approval never
-
-# Deploy the frontend to S3
-VITE_API_BASE_URL=<API_URL_FROM_OUTPUT> npm run build --workspace=packages/frontend
-aws s3 sync packages/frontend/dist/ s3://<FRONTEND_BUCKET_FROM_OUTPUT>/ --delete
-```
-
-The CDK stack provisions:
-- 14 Lambda functions (Node.js 22, ARM64, X-Ray tracing, esbuild-bundled)
-- 2 DynamoDB tables (adapter registry, analysis status)
-- S3 bucket with lifecycle policies (90-day expiration)
-- API Gateway REST API with SigV4 authorization (29s timeout)
-- Step Functions state machine with retry policies
-- CloudFront distribution for the frontend
-- CloudWatch log groups (2-week retention) and alarms
-
-**Stack Outputs after deployment:**
-
-| Output | Description |
-|--------|-------------|
-| `ApiGatewayApiUrl` | REST API endpoint |
-| `DistributionDomainName` | CloudFront URL for the frontend |
-| `FrontendBucketName` | S3 bucket to upload frontend assets |
-| `ResultsBucketName` | S3 bucket for analysis results |
-| `StateMachineArn` | Step Functions pipeline ARN |
-
-### Stack Configuration
-
-```typescript
-new BlastRadiusStack(app, 'BlastRadiusStack', {
-  enableBedrockSummary: true,   // Enable AI-powered risk summaries
-  resultsRetentionDays: 90,     // S3 lifecycle expiration
-  enableAuth: false,            // Set to true for production (SigV4), false for demos (open)
-});
-```
-
-| Prop | Default | Description |
-|------|---------|-------------|
-| `enableBedrockSummary` | `false` | Enable Bedrock-powered natural language summaries |
-| `resultsRetentionDays` | `90` | Days before analysis results expire in S3 |
-| `enableAuth` | `true` | Enable IAM SigV4 auth on API. Set `false` for browser-accessible demos |
-
-**Demo mode (`enableAuth: false`):** Removes IAM auth and enables CORS so the frontend can call the API directly from the browser. Anyone with the URL can access the API — use only for demos.
-
-### Stack Configuration
-
-```typescript
-new BlastRadiusStack(app, 'BlastRadiusStack', {
-  enableBedrockSummary: true,   // Enable AI-powered risk summaries
-  resultsRetentionDays: 90,     // S3 lifecycle expiration
-});
-```
-
-## Testing Strategy
-
-The project uses property-based testing (fast-check) to verify 19 correctness properties alongside traditional unit tests.
-
-**Property tests verify universal invariants:**
-- Schema validation accepts all valid manifests / rejects all invalid ones
-- Hierarchy flattening preserves all resources without loss or duplication
-- Adapter conversion produces valid canonical manifests
-- Graph traversal terminates and respects depth limits (even with cycles)
-- Impact score formula correctness and monotonicity
-- Score-to-category classification boundaries
-- Multi-path scoring uses the maximum
-- Filtering returns only matching resources
-- Access scoping excludes unauthorized resources
+## Development
 
 ```bash
-# Run all 349 tests
-npm test
-
-# Run only property tests
-npx vitest run --grep "Property"
+npm install         # Install all workspace dependencies
+npm run build       # Build all packages
+npm test            # Run all 349 tests
+npm run lint        # ESLint
+npm run format      # Prettier
 ```
-
-## Supported IaC Formats
-
-| Format | Input | Adapter |
-|--------|-------|---------|
-| CloudFormation | `DescribeChangeSet` output | Maps Action + Replacement to canonical types |
-| Terraform | `terraform show -json` plan | Maps actions array, skips no-op/read |
-| CDK | Cloud assembly diff | Flattens nested stacks, maps changeType |
-| Canonical | Direct manifest submission | No conversion needed |
-
-New adapters are registered in DynamoDB — no code changes to the core engine required.
-
-## Environment Variables
-
-| Variable | Lambda | Description |
-|----------|--------|-------------|
-| `ADAPTER_REGISTRY_TABLE` | Adapter Registry | DynamoDB table for adapter lookup |
-| `ANALYSIS_STATUS_TABLE` | Status, Ingestion | DynamoDB table for progress tracking |
-| `RESULTS_BUCKET` | Viz Prep, Failure Handler, Results | S3 bucket for analysis results |
-| `ENABLE_BEDROCK_SUMMARY` | Risk Summary | Feature flag for Bedrock integration (`true`/`1`) |
-| `BEDROCK_MODEL_ID` | Risk Summary | Bedrock model ID (default: Claude 3 Haiku) |
-| `STATE_MACHINE_ARN` | Analyze | Step Functions state machine ARN |
-| `BLAST_RADIUS_API_URL` | CLI | API endpoint URL for CLI tool |
 
 ## License
 

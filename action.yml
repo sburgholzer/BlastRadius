@@ -1,0 +1,159 @@
+name: 'Blast Radius Analysis'
+description: 'Analyze IaC changes (CDK, CloudFormation, Terraform) for blast radius risk before deployment'
+author: 'sburgholzer'
+
+branding:
+  icon: 'shield'
+  color: 'orange'
+
+inputs:
+  format:
+    description: 'Input format: cdk, cloudformation, terraform-plan, canonical'
+    required: true
+  stack:
+    description: 'CloudFormation stack name (required for cdk and cloudformation formats)'
+    required: false
+  app:
+    description: 'CDK app command (optional, reads cdk.json if omitted)'
+    required: false
+  template:
+    description: 'CloudFormation template file path (required for cloudformation format)'
+    required: false
+  input:
+    description: 'Pre-built input file path (skips auto-generation)'
+    required: false
+  threshold:
+    description: 'Risk score threshold (0-100). Fails if any resource exceeds this.'
+    required: false
+  ai-gate:
+    description: 'Fail if AI recommends against deployment (true/false)'
+    required: false
+    default: 'false'
+  no-summary:
+    description: 'Skip AI summary generation (true/false)'
+    required: false
+    default: 'false'
+  save:
+    description: 'Save generated input to this file path'
+    required: false
+  api-url:
+    description: 'Blast Radius API URL'
+    required: true
+  region:
+    description: 'AWS region'
+    required: false
+  profile:
+    description: 'AWS profile'
+    required: false
+  version:
+    description: 'CLI version to use (default: latest)'
+    required: false
+    default: 'latest'
+
+outputs:
+  analysis-id:
+    description: 'The analysis ID'
+    value: ${{ steps.run.outputs.analysis-id }}
+  verdict:
+    description: 'pass or fail'
+    value: ${{ steps.run.outputs.verdict }}
+  highest-score:
+    description: 'Highest impact score'
+    value: ${{ steps.run.outputs.highest-score }}
+  total-affected:
+    description: 'Total affected resources'
+    value: ${{ steps.run.outputs.total-affected }}
+  recommend-deploy:
+    description: 'AI deployment recommendation (true/false)'
+    value: ${{ steps.run.outputs.recommend-deploy }}
+  confidence:
+    description: 'AI recommendation confidence (high/medium/low)'
+    value: ${{ steps.run.outputs.confidence }}
+  summary:
+    description: 'AI-generated risk summary (markdown)'
+    value: ${{ steps.run.outputs.summary }}
+  result-json:
+    description: 'Full JSON result'
+    value: ${{ steps.run.outputs.result-json }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Download Blast Radius CLI
+      shell: bash
+      run: |
+        VERSION="${{ inputs.version }}"
+        if [ "$VERSION" = "latest" ]; then
+          URL="https://github.com/sburgholzer/BlastRadius/releases/latest/download/blast-radius.js"
+        else
+          URL="https://github.com/sburgholzer/BlastRadius/releases/download/${VERSION}/blast-radius.js"
+        fi
+        curl -sL "$URL" -o ${{ runner.temp }}/blast-radius.js
+        chmod +x ${{ runner.temp }}/blast-radius.js
+
+    - name: Run Blast Radius Analysis
+      id: run
+      shell: bash
+      env:
+        BLAST_RADIUS_API_URL: ${{ inputs.api-url }}
+      run: |
+        # Build command arguments
+        ARGS="analyze --format ${{ inputs.format }} --ci"
+
+        if [ -n "${{ inputs.stack }}" ]; then
+          ARGS="$ARGS --stack ${{ inputs.stack }}"
+        fi
+        if [ -n "${{ inputs.app }}" ]; then
+          ARGS="$ARGS --app \"${{ inputs.app }}\""
+        fi
+        if [ -n "${{ inputs.template }}" ]; then
+          ARGS="$ARGS --template ${{ inputs.template }}"
+        fi
+        if [ -n "${{ inputs.input }}" ]; then
+          ARGS="$ARGS --input ${{ inputs.input }}"
+        fi
+        if [ -n "${{ inputs.threshold }}" ]; then
+          ARGS="$ARGS --threshold ${{ inputs.threshold }}"
+        fi
+        if [ "${{ inputs.ai-gate }}" = "true" ]; then
+          ARGS="$ARGS --ai-gate"
+        fi
+        if [ "${{ inputs.no-summary }}" = "true" ]; then
+          ARGS="$ARGS --no-summary"
+        fi
+        if [ -n "${{ inputs.save }}" ]; then
+          ARGS="$ARGS --save ${{ inputs.save }}"
+        fi
+        if [ -n "${{ inputs.region }}" ]; then
+          ARGS="$ARGS --region ${{ inputs.region }}"
+        fi
+        if [ -n "${{ inputs.profile }}" ]; then
+          ARGS="$ARGS --profile ${{ inputs.profile }}"
+        fi
+
+        # Run the CLI
+        set +e
+        RESULT=$(node ${{ runner.temp }}/blast-radius.js $ARGS)
+        EXIT_CODE=$?
+        set -e
+
+        # Save full result
+        echo "$RESULT" > ${{ runner.temp }}/blast-radius-result.json
+
+        # Parse outputs
+        echo "result-json=$RESULT" >> $GITHUB_OUTPUT
+        echo "analysis-id=$(echo "$RESULT" | jq -r '.analysisId // empty')" >> $GITHUB_OUTPUT
+        echo "verdict=$(echo "$RESULT" | jq -r '.verdict // empty')" >> $GITHUB_OUTPUT
+        echo "highest-score=$(echo "$RESULT" | jq -r '.riskSummary.highestScore // empty')" >> $GITHUB_OUTPUT
+        echo "total-affected=$(echo "$RESULT" | jq -r '.riskSummary.totalAffected // empty')" >> $GITHUB_OUTPUT
+        echo "recommend-deploy=$(echo "$RESULT" | jq -r '.recommendDeploy // empty')" >> $GITHUB_OUTPUT
+        echo "confidence=$(echo "$RESULT" | jq -r '.confidence // empty')" >> $GITHUB_OUTPUT
+
+        # Multi-line summary output
+        EOF=$(dd if=/dev/urandom bs=15 count=1 status=none | base64)
+        echo "summary<<$EOF" >> $GITHUB_OUTPUT
+        echo "$RESULT" | jq -r '.naturalLanguageSummary // empty' >> $GITHUB_OUTPUT
+        echo "$EOF" >> $GITHUB_OUTPUT
+
+        # Exit with the CLI's exit code
+        exit $EXIT_CODE

@@ -9,37 +9,46 @@ Analyze the blast radius of AWS infrastructure changes before deployment. Discov
 
 > **⚠️ Requires a Blast Radius backend deployed to your AWS account.** The CLI and Action submit analyses to your backend API. See [Deploy Your Own Backend](#deploy-your-own-backend) for setup (one `cdk deploy` command).
 
-Add to any repo's workflow:
+Generate your changeset/plan in your workflow, then pass the file to the action:
 
 ```yaml
+# CDK example
+- run: npm install
+- run: |
+    npx cdk synth 2>/dev/null
+    cp cdk.out/MyStack.template.json template.json
+    CHANGESET="blast-radius-$(date +%s)"
+    aws cloudformation create-change-set --stack-name MyStack --change-set-name $CHANGESET \
+      --template-body file://template.json --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM \
+      --change-set-type UPDATE --output json
+    aws cloudformation wait change-set-create-complete --stack-name MyStack --change-set-name $CHANGESET
+    aws cloudformation describe-change-set --stack-name MyStack --change-set-name $CHANGESET --output json > changeset.json
+    aws cloudformation delete-change-set --stack-name MyStack --change-set-name $CHANGESET
+
 - uses: sburgholzer/BlastRadius@v0.1.0
-  id: blast-radius
   with:
-    format: cdk                              # or: cloudformation, terraform-plan
-    stack: MyProductionStack                 # required for cdk/cloudformation
-    threshold: 75                            # fail if score exceeds this
-    ai-gate: true                            # fail if AI says don't deploy
+    format: cloudformation
+    input: changeset.json
+    threshold: 75
+    ai-gate: true
     api-url: ${{ secrets.BLAST_RADIUS_URL }}
 ```
 
-**Outputs:** `verdict`, `highest-score`, `total-affected`, `recommend-deploy`, `confidence`, `summary`
-
-### Post AI Summary as PR Comment
-
 ```yaml
-- name: Comment PR
-  if: always() && github.event_name == 'pull_request'
-  uses: actions/github-script@v7
+# Terraform example
+- run: terraform plan -out=plan.out && terraform show -json plan.out > plan.json
+
+- uses: sburgholzer/BlastRadius@v0.1.0
   with:
-    script: |
-      const verdict = '${{ steps.blast-radius.outputs.verdict }}' === 'pass' ? '✅ PASS' : '❌ FAIL';
-      github.rest.issues.createComment({
-        owner: context.repo.owner,
-        repo: context.repo.repo,
-        issue_number: context.issue.number,
-        body: `## 🎯 Blast Radius — ${verdict}\n\n**Score:** ${{ steps.blast-radius.outputs.highest-score }}/100 | **Affected:** ${{ steps.blast-radius.outputs.total-affected }} | **Deploy:** ${{ steps.blast-radius.outputs.recommend-deploy }} (${{ steps.blast-radius.outputs.confidence }})\n\n${{ steps.blast-radius.outputs.summary }}`
-      });
+    format: terraform-plan
+    input: plan.json
+    ai-gate: true
+    api-url: ${{ secrets.BLAST_RADIUS_URL }}
 ```
+
+The action automatically comments on the PR with results. Disable with `comment-pr: false`.
+
+**Outputs:** `verdict`, `highest-score`, `total-affected`, `recommend-deploy`, `confidence`, `summary`
 
 ## Quick Start — CLI
 

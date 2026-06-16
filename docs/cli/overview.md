@@ -138,31 +138,63 @@ With `--ci`, output is JSON containing everything needed for PR comments and gat
 
 ### GitHub Action (recommended)
 
-The easiest way — use the published action directly:
+The easiest way — use the published action directly. Users generate their own changeset/plan in prior steps (they already have CDK/Terraform installed), then pass the file to the action:
 
 ```yaml
+# CDK example
+- run: npm install
+- run: |
+    npx cdk synth 2>/dev/null
+    cp cdk.out/MyStack.template.json template.json
+    CHANGESET_NAME="blast-radius-$(date +%s)"
+    aws cloudformation create-change-set \
+      --stack-name MyStack --change-set-name $CHANGESET_NAME \
+      --template-body file://template.json \
+      --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND \
+      --change-set-type UPDATE --output json
+    aws cloudformation wait change-set-create-complete \
+      --stack-name MyStack --change-set-name $CHANGESET_NAME
+    aws cloudformation describe-change-set \
+      --stack-name MyStack --change-set-name $CHANGESET_NAME \
+      --output json > changeset.json
+    aws cloudformation delete-change-set \
+      --stack-name MyStack --change-set-name $CHANGESET_NAME
+
 - uses: sburgholzer/BlastRadius@v0.1.0
-  id: blast-radius
   with:
-    format: cdk
-    stack: ${{ env.STACK_NAME }}
+    format: cloudformation
+    input: changeset.json
     threshold: 75
     ai-gate: true
     api-url: ${{ secrets.BLAST_RADIUS_URL }}
-
-- name: Comment PR
-  if: always() && github.event_name == 'pull_request'
-  uses: actions/github-script@v7
-  with:
-    script: |
-      const verdict = '${{ steps.blast-radius.outputs.verdict }}' === 'pass' ? '✅' : '❌';
-      github.rest.issues.createComment({
-        owner: context.repo.owner,
-        repo: context.repo.repo,
-        issue_number: context.issue.number,
-        body: `## 🎯 Blast Radius — ${verdict}\n\n**Score:** ${{ steps.blast-radius.outputs.highest-score }}/100 | **Affected:** ${{ steps.blast-radius.outputs.total-affected }}\n\n${{ steps.blast-radius.outputs.summary }}`
-      });
 ```
+
+```yaml
+# Terraform example
+- run: terraform plan -out=plan.out
+- run: terraform show -json plan.out > plan.json
+
+- uses: sburgholzer/BlastRadius@v0.1.0
+  with:
+    format: terraform-plan
+    input: plan.json
+    ai-gate: true
+    api-url: ${{ secrets.BLAST_RADIUS_URL }}
+```
+
+The action automatically comments on the PR with a formatted table and AI summary (disable with `comment-pr: false`).
+
+**Action inputs:**
+| Input | Required | Description |
+|-------|----------|-------------|
+| `format` | ✅ | `cloudformation`, `terraform-plan`, or `canonical` |
+| `input` | ✅ | Path to the input file |
+| `threshold` | | Risk score threshold (0-100) |
+| `ai-gate` | | Fail if AI recommends against deployment |
+| `no-summary` | | Skip AI summary |
+| `api-url` | ✅ | Blast Radius API URL |
+| `comment-pr` | | Auto-comment on PR (default: `true`) |
+| `version` | | CLI version (default: `latest`) |
 
 **Action outputs:**
 | Output | Description |
@@ -184,7 +216,8 @@ Download the bundled CLI from the GitHub release:
 ```yaml
 - run: |
     curl -sL https://github.com/sburgholzer/BlastRadius/releases/latest/download/blast-radius.js -o blast-radius.js
-    node blast-radius.js analyze --format cdk --stack $STACK_NAME --ai-gate --ci
+    sed -i '1{/^#!/d}' blast-radius.js
+    node blast-radius.js analyze --format cloudformation --input changeset.json --ai-gate --ci
   env:
     BLAST_RADIUS_API_URL: ${{ secrets.BLAST_RADIUS_URL }}
 ```
@@ -194,7 +227,8 @@ Download the bundled CLI from the GitHub release:
 blast-radius:
   script:
     - curl -sL https://github.com/sburgholzer/BlastRadius/releases/latest/download/blast-radius.js -o blast-radius.js
-    - node blast-radius.js analyze --format terraform-plan --ai-gate --ci
+    - sed -i '1{/^#!/d}' blast-radius.js
+    - node blast-radius.js analyze --format terraform-plan --input plan.json --ai-gate --ci
 ```
 
 **Jenkins:**
@@ -202,7 +236,8 @@ blast-radius:
 stage('Blast Radius') {
   sh '''
     curl -sL https://github.com/sburgholzer/BlastRadius/releases/latest/download/blast-radius.js -o blast-radius.js
-    node blast-radius.js analyze --format cdk --stack MyStack --threshold 75 --ai-gate --ci
+    sed -i '1{/^#!/d}' blast-radius.js
+    node blast-radius.js analyze --format cloudformation --input changeset.json --threshold 75 --ai-gate --ci
   '''
 }
 ```

@@ -136,11 +136,13 @@ type ValidationResult =
 
 - One program, one main command: `blast-radius analyze --format <format> [options]`
 - Supported formats: `cdk`, `cloudformation`, `terraform-plan`, `canonical`
-- Auto-generates input when no `--input` provided:
+- Auto-generates input when no `--input` provided (CLI local use only):
   - CDK: runs `cdk synth` + creates CloudFormation changeset (`--stack` required)
   - CloudFormation: creates changeset from template (`--stack` + `--template` required)
   - Terraform: runs `terraform plan` + `terraform show -json` (no extra args needed)
   - Canonical: always requires `--input`
+- GitHub Action takes pre-built files only (`--input` required) — users generate in their own workflow steps
+- Action auto-comments on PR (table + AI summary), disable with `comment-pr: false`
 - Two deployment gates:
   - `--threshold <0-100>` — numeric score-based gate
   - `--ai-gate` — judgment-based gate using AI's `recommendDeploy` field (forces summary on even if `--no-summary` set; errors if Bedrock is disabled server-side)

@@ -27,6 +27,10 @@ inputs:
   api-url:
     description: 'Blast Radius API URL'
     required: true
+  comment-pr:
+    description: 'Automatically comment results on the PR (true/false)'
+    required: false
+    default: 'true'
   version:
     description: 'CLI version to use (default: latest)'
     required: false
@@ -119,3 +123,48 @@ runs:
 
         # Exit with the CLI's exit code
         exit $EXIT_CODE
+
+    - name: Comment PR with Results
+      if: ${{ inputs.comment-pr == 'true' && github.event_name == 'pull_request' }}
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        VERDICT=$(echo '${{ steps.run.outputs.result-json }}' | jq -r '.verdict // "unknown"')
+        SCORE=$(echo '${{ steps.run.outputs.result-json }}' | jq -r '.riskSummary.highestScore // "N/A"')
+        AFFECTED=$(echo '${{ steps.run.outputs.result-json }}' | jq -r '.riskSummary.totalAffected // "N/A"')
+        DEPLOY=$(echo '${{ steps.run.outputs.result-json }}' | jq -r '.recommendDeploy // "N/A"')
+        CONFIDENCE=$(echo '${{ steps.run.outputs.result-json }}' | jq -r '.confidence // "N/A"')
+        SUMMARY=$(echo '${{ steps.run.outputs.result-json }}' | jq -r '.naturalLanguageSummary // ""')
+
+        if [ "$VERDICT" = "pass" ]; then
+          ICON="✅ PASS"
+        else
+          ICON="❌ FAIL"
+        fi
+
+        if [ "$DEPLOY" = "true" ]; then
+          DEPLOY_TEXT="✅ Deploy"
+        elif [ "$DEPLOY" = "false" ]; then
+          DEPLOY_TEXT="❌ Do Not Deploy"
+        else
+          DEPLOY_TEXT="N/A"
+        fi
+
+        BODY="## 🎯 Blast Radius Analysis — ${ICON}
+
+        | Metric | Value |
+        |--------|-------|
+        | Highest Score | ${SCORE}/100 |
+        | Affected Resources | ${AFFECTED} |
+        | AI Recommendation | ${DEPLOY_TEXT} |
+        | Confidence | ${CONFIDENCE} |
+
+        ---
+
+        ${SUMMARY:-*No AI summary available.*}"
+
+        # Remove leading whitespace from heredoc-style
+        BODY=$(echo "$BODY" | sed 's/^        //')
+
+        gh pr comment ${{ github.event.pull_request.number }} --body "$BODY" --repo ${{ github.repository }}

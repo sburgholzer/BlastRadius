@@ -106,8 +106,12 @@ runs:
         # Save full result
         echo "$RESULT" > ${{ runner.temp }}/blast-radius-result.json
 
-        # Parse outputs
-        echo "result-json=$RESULT" >> $GITHUB_OUTPUT
+        # Parse outputs (use heredoc for multi-line JSON)
+        EOF_RESULT=$(dd if=/dev/urandom bs=15 count=1 status=none | base64)
+        echo "result-json<<$EOF_RESULT" >> $GITHUB_OUTPUT
+        echo "$RESULT" >> $GITHUB_OUTPUT
+        echo "$EOF_RESULT" >> $GITHUB_OUTPUT
+
         echo "analysis-id=$(echo "$RESULT" | jq -r '.analysisId // empty')" >> $GITHUB_OUTPUT
         echo "verdict=$(echo "$RESULT" | jq -r '.verdict // empty')" >> $GITHUB_OUTPUT
         echo "highest-score=$(echo "$RESULT" | jq -r '.riskSummary.highestScore // empty')" >> $GITHUB_OUTPUT
@@ -125,33 +129,32 @@ runs:
         exit $EXIT_CODE
 
     - name: Comment PR with Results
-      if: ${{ inputs.comment-pr == 'true' && github.event_name == 'pull_request' }}
+      if: ${{ inputs.comment-pr == 'true' && github.event_name == 'pull_request' && always() }}
       shell: bash
       env:
         GH_TOKEN: ${{ github.token }}
       run: |
-        VERDICT=$(echo '${{ steps.run.outputs.result-json }}' | jq -r '.verdict // "unknown"')
-        SCORE=$(echo '${{ steps.run.outputs.result-json }}' | jq -r '.riskSummary.highestScore // "N/A"')
-        AFFECTED=$(echo '${{ steps.run.outputs.result-json }}' | jq -r '.riskSummary.totalAffected // "N/A"')
-        DEPLOY=$(echo '${{ steps.run.outputs.result-json }}' | jq -r '.recommendDeploy // "N/A"')
-        CONFIDENCE=$(echo '${{ steps.run.outputs.result-json }}' | jq -r '.confidence // "N/A"')
-        SUMMARY=$(echo '${{ steps.run.outputs.result-json }}' | jq -r '.naturalLanguageSummary // ""')
-
-        if [ "$VERDICT" = "pass" ]; then
-          ICON="✅ PASS"
-        else
-          ICON="❌ FAIL"
+        RESULT_FILE="${{ runner.temp }}/blast-radius-result.json"
+        if [ ! -f "$RESULT_FILE" ]; then
+          echo "No result file found, skipping comment"
+          exit 0
         fi
 
-        if [ "$DEPLOY" = "true" ]; then
-          DEPLOY_TEXT="✅ Deploy"
-        elif [ "$DEPLOY" = "false" ]; then
-          DEPLOY_TEXT="❌ Do Not Deploy"
-        else
-          DEPLOY_TEXT="N/A"
-        fi
+        VERDICT=$(jq -r '.verdict // "unknown"' "$RESULT_FILE")
+        SCORE=$(jq -r '.riskSummary.highestScore // "N/A"' "$RESULT_FILE")
+        AFFECTED=$(jq -r '.riskSummary.totalAffected // "N/A"' "$RESULT_FILE")
+        DEPLOY=$(jq -r '.recommendDeploy // "N/A"' "$RESULT_FILE")
+        CONFIDENCE=$(jq -r '.confidence // "N/A"' "$RESULT_FILE")
+        SUMMARY=$(jq -r '.naturalLanguageSummary // ""' "$RESULT_FILE")
 
-        BODY="## 🎯 Blast Radius Analysis — ${ICON}
+        if [ "$VERDICT" = "pass" ]; then ICON="✅ PASS"; else ICON="❌ FAIL"; fi
+        if [ "$DEPLOY" = "true" ]; then DEPLOY_TEXT="✅ Deploy"
+        elif [ "$DEPLOY" = "false" ]; then DEPLOY_TEXT="❌ Do Not Deploy"
+        else DEPLOY_TEXT="N/A"; fi
+
+        # Build comment body
+        BODY=$(cat <<COMMENT_EOF
+        ## 🎯 Blast Radius Analysis — ${ICON}
 
         | Metric | Value |
         |--------|-------|
@@ -162,9 +165,11 @@ runs:
 
         ---
 
-        ${SUMMARY:-*No AI summary available.*}"
+        ${SUMMARY:-*No AI summary available.*}
+        COMMENT_EOF
+        )
 
-        # Remove leading whitespace from heredoc-style
+        # Remove leading whitespace
         BODY=$(echo "$BODY" | sed 's/^        //')
 
         gh pr comment ${{ github.event.pull_request.number }} --body "$BODY" --repo ${{ github.repository }}

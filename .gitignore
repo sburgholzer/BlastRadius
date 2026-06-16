@@ -9,6 +9,10 @@ coverage
 cdk.out
 cdk.context.json
 
+# Local files
+DEMO-PLAN.md
+tmp-*.yml
+
 # Example build artifacts
 examples/**/lib/*.js
 examples/**/lib/*.js.map

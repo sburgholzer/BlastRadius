@@ -131,6 +131,9 @@ runs:
           ARGS="$ARGS --profile ${{ inputs.profile }}"
         fi
 
+        # Strip shebang if present (node can't parse it)
+        sed -i '1{/^#!/d}' ${{ runner.temp }}/blast-radius.js
+
         # Run the CLI
         set +e
         RESULT=$(node ${{ runner.temp }}/blast-radius.js $ARGS)

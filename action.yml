@@ -8,20 +8,11 @@ branding:
 
 inputs:
   format:
-    description: 'Input format: cdk, cloudformation, terraform-plan, canonical'
+    description: 'Input format: cloudformation, terraform-plan, canonical'
     required: true
-  stack:
-    description: 'CloudFormation stack name (required for cdk and cloudformation formats)'
-    required: false
-  app:
-    description: 'CDK app command (optional, reads cdk.json if omitted)'
-    required: false
-  template:
-    description: 'CloudFormation template file path (required for cloudformation format)'
-    required: false
   input:
-    description: 'Pre-built input file path (skips auto-generation)'
-    required: false
+    description: 'Path to the input file (changeset JSON, terraform plan JSON, or canonical manifest)'
+    required: true
   threshold:
     description: 'Risk score threshold (0-100). Fails if any resource exceeds this.'
     required: false
@@ -33,18 +24,9 @@ inputs:
     description: 'Skip AI summary generation (true/false)'
     required: false
     default: 'false'
-  save:
-    description: 'Save generated input to this file path'
-    required: false
   api-url:
     description: 'Blast Radius API URL'
     required: true
-  region:
-    description: 'AWS region'
-    required: false
-  profile:
-    description: 'AWS profile'
-    required: false
   version:
     description: 'CLI version to use (default: latest)'
     required: false
@@ -89,7 +71,8 @@ runs:
           URL="https://github.com/sburgholzer/BlastRadius/releases/download/${VERSION}/blast-radius.js"
         fi
         curl -sL "$URL" -o ${{ runner.temp }}/blast-radius.js
-        chmod +x ${{ runner.temp }}/blast-radius.js
+        # Strip shebang (node can't parse it when invoked with node <file>)
+        sed -i '1{/^#!/d}' ${{ runner.temp }}/blast-radius.js
 
     - name: Run Blast Radius Analysis
       id: run
@@ -98,20 +81,8 @@ runs:
         BLAST_RADIUS_API_URL: ${{ inputs.api-url }}
       run: |
         # Build command arguments
-        ARGS="analyze --format ${{ inputs.format }} --ci"
+        ARGS="analyze --format ${{ inputs.format }} --input ${{ inputs.input }} --ci"
 
-        if [ -n "${{ inputs.stack }}" ]; then
-          ARGS="$ARGS --stack ${{ inputs.stack }}"
-        fi
-        if [ -n "${{ inputs.app }}" ]; then
-          ARGS="$ARGS --app \"${{ inputs.app }}\""
-        fi
-        if [ -n "${{ inputs.template }}" ]; then
-          ARGS="$ARGS --template ${{ inputs.template }}"
-        fi
-        if [ -n "${{ inputs.input }}" ]; then
-          ARGS="$ARGS --input ${{ inputs.input }}"
-        fi
         if [ -n "${{ inputs.threshold }}" ]; then
           ARGS="$ARGS --threshold ${{ inputs.threshold }}"
         fi
@@ -121,18 +92,6 @@ runs:
         if [ "${{ inputs.no-summary }}" = "true" ]; then
           ARGS="$ARGS --no-summary"
         fi
-        if [ -n "${{ inputs.save }}" ]; then
-          ARGS="$ARGS --save ${{ inputs.save }}"
-        fi
-        if [ -n "${{ inputs.region }}" ]; then
-          ARGS="$ARGS --region ${{ inputs.region }}"
-        fi
-        if [ -n "${{ inputs.profile }}" ]; then
-          ARGS="$ARGS --profile ${{ inputs.profile }}"
-        fi
-
-        # Strip shebang if present (node can't parse it)
-        sed -i '1{/^#!/d}' ${{ runner.temp }}/blast-radius.js
 
         # Run the CLI
         set +e

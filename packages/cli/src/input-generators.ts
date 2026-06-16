@@ -61,7 +61,6 @@ function synthesizeCdkApp(options: GeneratorOptions): string {
     `"${options.stack}"`,
     '--json',
     `> ${tmpTemplate}`,
-    '2>/dev/null',
   ].filter(Boolean).join(' ');
 
   try {
